@@ -7,14 +7,27 @@ class HomeScreen extends StatelessWidget{
   Widget build(BuildContext context){
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Home"),
+        title: const Text("Helpnova"),
         centerTitle: true,
       ),
-      body: const Center(
-        child: Text(
-          "Helpnova",
-          style: TextStyle(fontSize: 22),
-        )
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+
+          children: [
+            //heading
+            const Text(
+              "Services",
+              style: TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }
