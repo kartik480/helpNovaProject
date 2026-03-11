@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'splash_screen.dart';
+import 'login_signup.dart';
 
 void main(){
   runApp(const MyApp());
@@ -12,7 +12,7 @@ class MyApp extends StatelessWidget{
     // TODO: implement build
     return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: SplashScreen(),
+      home: LoginSignupScreen(),
     );
   }
 }
