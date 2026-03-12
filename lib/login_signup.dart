@@ -252,95 +252,55 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
 
   //signup form//
   Widget signUpForm() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-
-          TextField(
-            decoration: InputDecoration(
-              labelText: "FULL NAME",
-              hintText: "John Doe",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+  return Scaffold(
+    body: SafeArea(
+      child: SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.all(20),
+        child: Column(
+          children: [
+            TextField(
+              decoration: InputDecoration(
+                labelText: "Full Name",
               ),
             ),
-          ),
 
-          const SizedBox(height: 15),
+            SizedBox(height: 15),
 
-          TextField(
-            decoration: InputDecoration(
-              labelText: "PHONE NUMBER",
-              hintText: "+1 234 567 890",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+            TextField(
+              decoration: InputDecoration(
+                labelText: "Email"
               ),
             ),
-          ),
 
-          const SizedBox(height: 15),
+            SizedBox(height: 15),
 
-          TextField(
-            decoration: InputDecoration(
-              labelText: "EMAIL",
-              hintText: "john@example.com",
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
+            TextField(
+              decoration: InputDecoration(
+                labelText: "Phone",
               ),
             ),
-          ),
 
-          const SizedBox(height: 15),
+            SizedBox(height: 15),
 
-          Row(
-            children: [
-
-              Expanded(
-                child: TextField(
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "PASSWORD",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
+            TextField(
+              decoration: InputDecoration(
+                labelText: "Password",
               ),
-
-              const SizedBox(width: 10),
-
-              Expanded(
-                child: TextField(
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "CONFIRM",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-
-            ],
-          ),
-
-          const SizedBox(height: 15),
-
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-              ),
-              onPressed: () {},
-              child: const Text("Create Account"),
             ),
-          ),
 
-        ],
+            SizedBox(height: 30),
+
+            ElevatedButton(
+              onPressed: (){},
+              child: Text("Sign Up"),
+            )
+          ],
+        )
       ),
-    );
+      )
+    )
+  );
   }
 
 
