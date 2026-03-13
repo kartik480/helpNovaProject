@@ -241,7 +241,12 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder:(context)=> HomeScreen()),
+              );
+            },
             child: const Text("Sign In"),
           ),
         ),
