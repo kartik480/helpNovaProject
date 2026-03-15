@@ -150,6 +150,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: SafeArea(
+        bottom: false, // Let bottom nav handle bottom safe area
         child: Column(
           children: [
             //TOP BAR - Fixed at top //
@@ -342,22 +343,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                         // Main Services Grid - Responsive
                         GridView.count(
-                          crossAxisCount: Responsive.gridCrossAxisCount(
-                            context,
-                            mobile: 2,
-                            tablet: 3,
-                            desktop: 4,
-                          ),
+                          crossAxisCount: Responsive.isSmallMobile(context) 
+                            ? 2 
+                            : Responsive.gridCrossAxisCount(
+                                context,
+                                mobile: 2,
+                                tablet: 3,
+                                desktop: 4,
+                              ),
                           shrinkWrap: true,
                           physics: NeverScrollableScrollPhysics(),
-                          crossAxisSpacing: Responsive.spacing(context, 12),
-                          mainAxisSpacing: Responsive.spacing(context, 12),
-                          childAspectRatio: Responsive.gridAspectRatio(
-                            context,
-                            mobile: 1.5,
-                            tablet: 1.3,
-                            desktop: 1.2,
-                          ),
+                          crossAxisSpacing: Responsive.spacing(context, Responsive.isSmallMobile(context) ? 8 : 12),
+                          mainAxisSpacing: Responsive.spacing(context, Responsive.isSmallMobile(context) ? 8 : 12),
+                          childAspectRatio: Responsive.isSmallMobile(context)
+                            ? 1.6
+                            : Responsive.gridAspectRatio(
+                                context,
+                                mobile: 1.5,
+                                tablet: 1.3,
+                                desktop: 1.2,
+                              ),
                           children: [
                             serviceCard(context, Icons.local_hospital, "Medical Help"),
                             serviceCard(context, Icons.bloodtype, "Blood Donation"),
@@ -448,6 +453,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             return _buildNearbyRequestCard(context, request);
                           }).toList(),
                         SizedBox(height: Responsive.spacing(context, 20)),
+                        // Add bottom padding to account for bottom navigation bar
+                        SizedBox(height: Responsive.bottomNavContentHeight(context) + 10),
                       ],
                     ),
                   ),

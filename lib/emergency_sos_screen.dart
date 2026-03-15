@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'widgets/radar_map_panel.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'utils/responsive.dart';
 
 class EmergencySosScreen extends StatefulWidget {
   const EmergencySosScreen({super.key});
@@ -217,7 +218,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           // Emergency Status Banner
           Container(
             width: double.infinity,
-            padding: EdgeInsets.all(20),
+            padding: EdgeInsets.all(Responsive.spacing(context, 20)),
             decoration: BoxDecoration(
               color: Colors.red,
               boxShadow: [
@@ -233,23 +234,23 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 Icon(
                   Icons.emergency,
                   color: Colors.white,
-                  size: 48,
+                  size: Responsive.iconSize(context, 48),
                 ),
-                SizedBox(height: 12),
+                SizedBox(height: Responsive.spacing(context, 12)),
                 Text(
                   'Emergency Alert Sent!',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
+                    fontSize: Responsive.fontSize(context, 22),
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 8),
+                SizedBox(height: Responsive.spacing(context, 8)),
                 Text(
                   'Your location has been shared with nearby helpers',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
-                    fontSize: 14,
+                    fontSize: Responsive.fontSize(context, 14),
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -260,8 +261,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           // Notification Alert Panel
           if (userLatitude != null && userLongitude != null)
             Container(
-              margin: EdgeInsets.all(16),
-              padding: EdgeInsets.all(20),
+              margin: EdgeInsets.all(Responsive.spacing(context, 16)),
+              padding: EdgeInsets.all(Responsive.spacing(context, 20)),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
                 borderRadius: BorderRadius.circular(16),
@@ -278,8 +279,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.notifications_active, color: Colors.orange.shade700, size: 28),
-                      SizedBox(width: 12),
+                      Icon(Icons.notifications_active, color: Colors.orange.shade700, size: Responsive.iconSize(context, 28)),
+                      SizedBox(width: Responsive.spacing(context, 12)),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,16 +288,16 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                             Text(
                               'Alert Nearby Helpers',
                               style: TextStyle(
-                                fontSize: 18,
+                                fontSize: Responsive.fontSize(context, 18),
                                 fontWeight: FontWeight.bold,
                                 color: Colors.orange.shade900,
                               ),
                             ),
-                            SizedBox(height: 4),
+                            SizedBox(height: Responsive.spacing(context, 4)),
                             Text(
                               'Send push notification to nearby helpers',
                               style: TextStyle(
-                                fontSize: 14,
+                                fontSize: Responsive.fontSize(context, 14),
                                 color: Colors.orange.shade800,
                               ),
                             ),
@@ -305,7 +306,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                       ),
                     ],
                   ),
-                  SizedBox(height: 16),
+                  SizedBox(height: Responsive.spacing(context, 16)),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(

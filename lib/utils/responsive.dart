@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 class Responsive {
   // Screen size breakpoints
+  static const double smallMobileBreakpoint = 360;
   static const double mobileBreakpoint = 600;
   static const double tabletBreakpoint = 1024;
   static const double desktopBreakpoint = 1440;
@@ -14,6 +15,11 @@ class Responsive {
   // Get screen height
   static double height(BuildContext context) {
     return MediaQuery.of(context).size.height;
+  }
+
+  // Check if device is small mobile (very small screens)
+  static bool isSmallMobile(BuildContext context) {
+    return width(context) < smallMobileBreakpoint;
   }
 
   // Check if device is mobile
@@ -33,7 +39,9 @@ class Responsive {
 
   // Get responsive padding
   static EdgeInsets padding(BuildContext context) {
-    if (isMobile(context)) {
+    if (isSmallMobile(context)) {
+      return EdgeInsets.symmetric(horizontal: 12, vertical: 6);
+    } else if (isMobile(context)) {
       return EdgeInsets.symmetric(horizontal: 16, vertical: 8);
     } else if (isTablet(context)) {
       return EdgeInsets.symmetric(horizontal: 32, vertical: 16);
@@ -45,7 +53,9 @@ class Responsive {
   // Get responsive font size
   static double fontSize(BuildContext context, double baseSize) {
     double scale = 1.0;
-    if (isTablet(context)) {
+    if (isSmallMobile(context)) {
+      scale = 0.9; // Slightly smaller for very small screens
+    } else if (isTablet(context)) {
       scale = 1.2;
     } else if (isDesktop(context)) {
       scale = 1.4;
@@ -56,7 +66,9 @@ class Responsive {
   // Get responsive icon size
   static double iconSize(BuildContext context, double baseSize) {
     double scale = 1.0;
-    if (isTablet(context)) {
+    if (isSmallMobile(context)) {
+      scale = 0.9; // Slightly smaller for very small screens
+    } else if (isTablet(context)) {
       scale = 1.3;
     } else if (isDesktop(context)) {
       scale = 1.5;
@@ -67,7 +79,9 @@ class Responsive {
   // Get responsive spacing
   static double spacing(BuildContext context, double baseSpacing) {
     double scale = 1.0;
-    if (isTablet(context)) {
+    if (isSmallMobile(context)) {
+      scale = 0.85; // Slightly smaller for very small screens
+    } else if (isTablet(context)) {
       scale = 1.2;
     } else if (isDesktop(context)) {
       scale = 1.5;
@@ -108,14 +122,30 @@ class Responsive {
     }
   }
 
-  // Get responsive bottom navigation height
+  // Get responsive bottom navigation height (including safe area)
   static double bottomNavHeight(BuildContext context) {
-    if (isMobile(context)) {
-      return 80;
+    final safeAreaBottom = MediaQuery.of(context).padding.bottom;
+    if (isSmallMobile(context)) {
+      return 70 + safeAreaBottom;
+    } else if (isMobile(context)) {
+      return 75 + safeAreaBottom;
     } else if (isTablet(context)) {
-      return 90;
+      return 85 + safeAreaBottom;
     } else {
-      return 100;
+      return 95 + safeAreaBottom;
+    }
+  }
+
+  // Get bottom navigation content height (without safe area)
+  static double bottomNavContentHeight(BuildContext context) {
+    if (isSmallMobile(context)) {
+      return 70;
+    } else if (isMobile(context)) {
+      return 75;
+    } else if (isTablet(context)) {
+      return 85;
+    } else {
+      return 95;
     }
   }
 

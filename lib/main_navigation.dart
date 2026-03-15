@@ -36,6 +36,9 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   Widget _buildInnovativeBottomNav() {
+    final safeAreaBottom = MediaQuery.of(context).padding.bottom;
+    final contentHeight = Responsive.bottomNavContentHeight(context);
+    
     return Container(
       height: Responsive.bottomNavHeight(context),
       decoration: BoxDecoration(
@@ -52,30 +55,42 @@ class _MainNavigationState extends State<MainNavigation> {
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildNavItem(Icons.home_rounded, 'Home', 0),
-          _buildNavItem(Icons.map_rounded, 'Map', 1),
-          _buildNavItem(Icons.add_circle_rounded, 'Request', 2, isCenter: true),
-          _buildNavItem(Icons.notifications_rounded, 'Alerts', 3),
-          _buildNavItem(Icons.person_rounded, 'Profile', 4),
-        ],
+      child: SafeArea(
+        top: false,
+        child: Container(
+          height: contentHeight,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildNavItem(Icons.home_rounded, 'Home', 0),
+              _buildNavItem(Icons.map_rounded, 'Map', 1),
+              _buildNavItem(Icons.add_circle_rounded, 'Request', 2, isCenter: true),
+              _buildNavItem(Icons.notifications_rounded, 'Alerts', 3),
+              _buildNavItem(Icons.person_rounded, 'Profile', 4),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _buildNavItem(IconData icon, String label, int index, {bool isCenter = false}) {
     final isSelected = _currentIndex == index;
-    final iconSize = Responsive.iconSize(context, isSelected ? 26 : 24);
-    final centerIconSize = Responsive.iconSize(context, isSelected ? 30 : 28);
-    final fontSize = Responsive.fontSize(context, 11);
-    final centerButtonSize = Responsive.value(
-      context,
-      mobile: isSelected ? 65.0 : 60.0,
-      tablet: isSelected ? 75.0 : 70.0,
-      desktop: isSelected ? 85.0 : 80.0,
-    );
+    final iconSize = Responsive.isSmallMobile(context)
+      ? Responsive.iconSize(context, isSelected ? 22 : 20)
+      : Responsive.iconSize(context, isSelected ? 26 : 24);
+    final centerIconSize = Responsive.isSmallMobile(context)
+      ? Responsive.iconSize(context, isSelected ? 26 : 24)
+      : Responsive.iconSize(context, isSelected ? 30 : 28);
+    final fontSize = Responsive.fontSize(context, Responsive.isSmallMobile(context) ? 10 : 11);
+    final centerButtonSize = Responsive.isSmallMobile(context)
+      ? (isSelected ? 52.0 : 50.0)
+      : Responsive.value(
+          context,
+          mobile: isSelected ? 58.0 : 55.0,
+          tablet: isSelected ? 70.0 : 65.0,
+          desktop: isSelected ? 80.0 : 75.0,
+        );
     
     if (isCenter) {
       // Special center button with elevated design
@@ -112,8 +127,12 @@ class _MainNavigationState extends State<MainNavigation> {
         duration: Duration(milliseconds: 200),
         curve: Curves.easeInOut,
         padding: EdgeInsets.symmetric(
-          horizontal: Responsive.spacing(context, 14),
-          vertical: Responsive.spacing(context, 10),
+          horizontal: Responsive.isSmallMobile(context) 
+            ? Responsive.spacing(context, 8) 
+            : Responsive.spacing(context, 14),
+          vertical: Responsive.isSmallMobile(context)
+            ? Responsive.spacing(context, 6)
+            : Responsive.spacing(context, 10),
         ),
         decoration: BoxDecoration(
           color: isSelected ? Colors.red.shade50 : Colors.transparent,
@@ -157,7 +176,9 @@ class _MainNavigationState extends State<MainNavigation> {
                   ),
               ],
             ),
-            SizedBox(height: Responsive.spacing(context, 6)),
+            SizedBox(height: Responsive.isSmallMobile(context) 
+              ? Responsive.spacing(context, 4) 
+              : Responsive.spacing(context, 6)),
             AnimatedDefaultTextStyle(
               duration: Duration(milliseconds: 200),
               style: TextStyle(
