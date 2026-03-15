@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
+import 'main_navigation.dart';
 import 'services/api_service.dart';
+import 'utils/responsive.dart';
 
 
 class LoginSignupScreen extends StatefulWidget {
@@ -147,38 +148,47 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             Column(
               children: [
 
-                const SizedBox(height: 80),
+                SizedBox(height: Responsive.spacing(context, 80)),
 
                 SizedBox(
-                  height: 110,
+                  height: Responsive.value(
+                    context,
+                    mobile: 110.0,
+                    tablet: 130.0,
+                    desktop: 150.0,
+                  ),
                   child: Image.asset(
                     "images/logo.png",
                     fit: BoxFit.contain,
                   ),
                 ),
-                const SizedBox(height: 15),
+                SizedBox(height: Responsive.spacing(context, 15)),
               ],
             ),
 
-            const SizedBox(height: 1),
+            SizedBox(height: Responsive.spacing(context, 1)),
 
-            const Text(
+            Text(
               "Help Nova",
               style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold),
+                fontSize: Responsive.fontSize(context, 28),
+                fontWeight: FontWeight.bold,
+              ),
             ),
 
-            const Text(
+            Text(
               "A hyperlocal emergency app",
-              style: TextStyle(color: Colors.red),
+              style: TextStyle(
+                color: Colors.red,
+                fontSize: Responsive.fontSize(context, 14),
+              ),
             ),
 
-            const SizedBox(height: 30),
+            SizedBox(height: Responsive.spacing(context, 30)),
 
             loginCard(),
 
-            const SizedBox(height: 20),
+            SizedBox(height: Responsive.spacing(context, 20)),
 
             socialLogin(),
 
@@ -189,9 +199,17 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
   }
 //login card//
   Widget loginCard() {
+    final padding = Responsive.padding(context);
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(20),
+      margin: EdgeInsets.symmetric(
+        horizontal: Responsive.value(
+          context,
+          mobile: 20.0,
+          tablet: 40.0,
+          desktop: 60.0,
+        ),
+      ),
+      padding: EdgeInsets.all(Responsive.spacing(context, 20)),
 
       decoration: BoxDecoration(
         color: Colors.white,
@@ -262,40 +280,61 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
   Widget socialLogin() {
     return Column(
       children: [
-
-        const Text("Or continue with"),
-
-        const SizedBox(height: 15),
-
+        Text(
+          "Or continue with",
+          style: TextStyle(
+            fontSize: Responsive.fontSize(context, 14),
+          ),
+        ),
+        SizedBox(height: Responsive.spacing(context, 15)),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
             CircleAvatar(
-              radius: 25,
+              radius: Responsive.value(
+                context,
+                mobile: 25.0,
+                tablet: 30.0,
+                desktop: 35.0,
+              ),
               backgroundColor: Colors.white,
-              child: Icon(Icons.g_mobiledata, size: 30),
+              child: Icon(
+                Icons.g_mobiledata,
+                size: Responsive.iconSize(context, 30),
+              ),
             ),
-
-            const SizedBox(width: 20),
-
-            const CircleAvatar(
-              radius: 25,
+            SizedBox(width: Responsive.spacing(context, 20)),
+            CircleAvatar(
+              radius: Responsive.value(
+                context,
+                mobile: 25.0,
+                tablet: 30.0,
+                desktop: 35.0,
+              ),
               backgroundColor: Colors.white,
-              child: Icon(Icons.apple),
+              child: Icon(
+                Icons.apple,
+                size: Responsive.iconSize(context, 30),
+              ),
             ),
-
           ],
         ),
-
-        const SizedBox(height: 20),
-
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 40),
+        SizedBox(height: Responsive.spacing(context, 20)),
+        Padding(
+          padding: EdgeInsets.symmetric(
+            horizontal: Responsive.value(
+              context,
+              mobile: 40.0,
+              tablet: 60.0,
+              desktop: 80.0,
+            ),
+          ),
           child: Text(
             "By joining, you agree to Help Nova's Terms of Service and Privacy Policy.",
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12),
+            style: TextStyle(
+              fontSize: Responsive.fontSize(context, 12),
+            ),
           ),
         )
       ],
@@ -454,7 +493,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     if (result['success'] == true) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (context) => HomeScreen()),
+        MaterialPageRoute(builder: (context) => MainNavigation()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

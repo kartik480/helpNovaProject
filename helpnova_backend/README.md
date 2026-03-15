@@ -128,6 +128,7 @@ Authorization: Bearer <token>
 
 In the Flutter app, update the `baseUrl` in `lib/services/api_service.dart`:
 
+### Local Development:
 - **Android Emulator**: `http://10.0.2.2:5000/api`
 - **iOS Simulator**: `http://localhost:5000/api`
 - **Physical Device**: `http://<your-computer-ip>:5000/api`
@@ -135,3 +136,11 @@ In the Flutter app, update the `baseUrl` in `lib/services/api_service.dart`:
 To find your computer's IP address:
 - Windows: `ipconfig` in Command Prompt
 - Mac/Linux: `ifconfig` in Terminal
+
+### Production (Render.com):
+- Update `baseUrl` to your Render.com service URL: `https://your-service-name.onrender.com/api`
+- See `RENDER_DEPLOYMENT.md` for detailed deployment instructions
+
+## Deployment to Render.com
+
+See `../RENDER_DEPLOYMENT.md` for complete deployment guide to Render.com.

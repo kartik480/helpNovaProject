@@ -12,7 +12,12 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(cors());
+// CORS configuration - allows requests from any origin (for mobile apps)
+app.use(cors({
+  origin: '*', // In production, you might want to restrict this to your app's domain
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -26,6 +31,7 @@ app.use("/api/mechanic", require("./routes/mechanicRoutes"));
 app.use("/api/electrician", require("./routes/electricianRoutes"));
 app.use("/api/volunteer", require("./routes/volunteerRoutes"));
 app.use("/api/fire", require("./routes/fireEmergencyRoutes"));
+app.use("/api/nearby", require("./routes/nearbyRoutes"));
 
 // Health check endpoint
 app.get("/", (req, res) => {

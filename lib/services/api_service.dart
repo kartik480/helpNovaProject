@@ -3,11 +3,12 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
-  // Change this to your backend server URL
-  // For Android emulator, use: http://10.0.2.2:5000/api
-  // For iOS simulator, use: http://localhost:5000/api
-  // For physical device, use your computer's IP: http://192.168.0.149:5000/api
-  static const String baseUrl = 'http://192.168.0.149:5000/api';
+  // Backend server URL
+  // Production (Render.com): Live backend URL
+  static const String baseUrl = 'https://helpnovaproject.onrender.com/api';
+  
+  // For local development, uncomment below and comment the line above:
+  // static const String baseUrl = 'http://192.168.0.149:5000/api';
 
   // Save token to shared preferences
   static Future<void> saveToken(String token) async {
@@ -872,6 +873,88 @@ class ApiService {
       return {
         'success': false,
         'message': errorMessage,
+      };
+    }
+  }
+
+  // Get nearby requests
+  static Future<Map<String, dynamic>> getNearbyRequests({
+    required double latitude,
+    required double longitude,
+    double radius = 5.0, // Default 5km radius
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final url = '$baseUrl/nearby/nearby?latitude=$latitude&longitude=$longitude&radius=$radius';
+      print('[API] Fetching nearby requests from: $url');
+      
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Connection timeout. Please check if the server is running.');
+        },
+      );
+      
+      print('[API] Nearby requests response status: ${response.statusCode}');
+      print('[API] Nearby requests response body: ${response.body}');
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        print('[API] Nearby requests fetched: ${data['count'] ?? 0} requests');
+        return {
+          'success': true,
+          'requests': data['requests'] ?? [],
+          'count': data['count'] ?? 0,
+        };
+      } else {
+        print('[API] Failed to fetch nearby requests: ${data['message'] ?? 'Unknown error'}');
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch nearby requests',
+          'requests': [],
+        };
+      }
+    } on http.ClientException {
+      return {
+        'success': false,
+        'message': 'Cannot connect to server. Please make sure the backend server is running.',
+        'requests': [],
+      };
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+        'requests': [],
       };
     }
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'profile_screen.dart';
 import 'services/api_service.dart';
 import 'emergency_sos_screen.dart';
@@ -10,6 +11,8 @@ import 'mechanic_help_screen.dart';
 import 'electrician_help_screen.dart';
 import 'volunteer_help_screen.dart';
 import 'fire_emergency_screen.dart';
+import 'utils/responsive.dart';
+import 'request_detail_screen.dart';
 
 class HomeScreen extends StatefulWidget{
   const HomeScreen({super.key});
@@ -18,13 +21,36 @@ class HomeScreen extends StatefulWidget{
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String? userName;
+  List<dynamic> nearbyRequests = [];
+  bool isLoadingRequests = false;
+  double? userLatitude;
+  double? userLongitude;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUserName();
+    _getUserLocation();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      // Refresh nearby requests when app comes back to foreground
+      if (userLatitude != null && userLongitude != null) {
+        _loadNearbyRequests();
+      }
+    }
   }
 
   Future<void> _loadUserName() async {
@@ -34,8 +60,75 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _getUserLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        userLatitude = position.latitude;
+        userLongitude = position.longitude;
+      });
+
+      _loadNearbyRequests();
+    } catch (e) {
+      print('Error getting location: $e');
+    }
+  }
+
+  Future<void> _loadNearbyRequests() async {
+    if (userLatitude == null || userLongitude == null) {
+      print('[HomeScreen] Cannot load nearby requests: location not available');
+      return;
+    }
+
+    print('[HomeScreen] Loading nearby requests at (${userLatitude}, ${userLongitude})');
+    
+    setState(() {
+      isLoadingRequests = true;
+    });
+
+    final result = await ApiService.getNearbyRequests(
+      latitude: userLatitude!,
+      longitude: userLongitude!,
+      radius: 10.0, // 10km radius (increased from 5km)
+    );
+
+    setState(() {
+      isLoadingRequests = false;
+      if (result['success'] == true) {
+        nearbyRequests = result['requests'] ?? [];
+        print('[HomeScreen] Loaded ${nearbyRequests.length} nearby requests');
+      } else {
+        print('[HomeScreen] Failed to load nearby requests: ${result['message']}');
+        nearbyRequests = [];
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final padding = Responsive.padding(context);
+    final logoSize = Responsive.logoSize(context);
+    
     return Scaffold(
       backgroundColor: Colors.grey[100],
       body: SafeArea(
@@ -43,38 +136,40 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             //TOP BAR - Fixed at top //
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: EdgeInsets.symmetric(
+                horizontal: padding.horizontal,
+                vertical: padding.vertical,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-
                   Row(
                     children: [
                       Image.asset(
                         'images/logo.png',
-                        width: 50,
-                        height: 50,
+                        width: logoSize,
+                        height: logoSize,
                         fit: BoxFit.contain,
                       ),
-
-                      SizedBox(width: 8),
-
+                      SizedBox(width: Responsive.spacing(context, 8)),
                       Text(
                         "Help Nova",
                         style: TextStyle(
-                          fontSize: 20,
+                          fontSize: Responsive.fontSize(context, 20),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
-
                   Row(
                     children: [
-                      Icon(Icons.notifications_none),
-                      SizedBox(width: 10),
+                      Icon(
+                        Icons.notifications_none,
+                        size: Responsive.iconSize(context, 24),
+                      ),
+                      SizedBox(width: Responsive.spacing(context, 10)),
                       GestureDetector(
-                        onTap: (){
+                        onTap: () {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -83,10 +178,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
                         },
                         child: CircleAvatar(
+                          radius: Responsive.value(
+                            context,
+                            mobile: 20.0,
+                            tablet: 25.0,
+                            desktop: 30.0,
+                          ),
                           backgroundImage: NetworkImage("https://i.pravatar.cc/150?img=3"),
                         ),
                       ),
-
                     ],
                   ),
                 ],
@@ -95,177 +195,243 @@ class _HomeScreenState extends State<HomeScreen> {
             // Scrollable content //
             Expanded(
               child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: 20),
-
-                // GREETING CARD
-                Container(
-                  width: double.infinity,
-                  padding: EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: Responsive.maxContentWidth(context),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "Hello ${userName ?? 'User'} 👋",
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text("Stay safe and help others in need"),
-                    ],
-                  ),
-                ),
-
-                SizedBox(height: 20),
-
-                // Emergency SOS Box - Big and Visible
-                GestureDetector(
-                  onTap: () {
-                    // Navigate to Emergency SOS screen
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => EmergencySosScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.red,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.red.withOpacity(0.6),
-                          blurRadius: 30,
-                          spreadRadius: 4,
-                          offset: Offset(0, 6),
-                        )
-                      ],
-                    ),
-                    child: Row(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: padding.horizontal),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // SOS Siren Icon
+                        SizedBox(height: Responsive.spacing(context, 20)),
+
+                        // GREETING CARD
                         Container(
-                          padding: EdgeInsets.all(12),
+                          width: double.infinity,
+                          padding: EdgeInsets.all(Responsive.spacing(context, 16)),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
-                            shape: BoxShape.circle,
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(
-                            Icons.emergency,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        ),
-
-                        SizedBox(width: 16),
-
-                        // SOS Text
-                        Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                "EMERGENCY SOS",
+                                "Hello ${userName ?? 'User'} 👋",
                                 style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 20,
+                                  fontSize: Responsive.fontSize(context, 18),
                                   fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
                                 ),
                               ),
-                              SizedBox(height: 4),
+                              SizedBox(height: Responsive.spacing(context, 4)),
                               Text(
-                                "Request Immediate Help",
+                                "Stay safe and help others in need",
                                 style: TextStyle(
-                                  color: Colors.white.withOpacity(0.9),
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w500,
+                                  fontSize: Responsive.fontSize(context, 14),
                                 ),
-                              )
+                              ),
                             ],
                           ),
                         ),
+
+                        SizedBox(height: Responsive.spacing(context, 20)),
+
+                        // Emergency SOS Box - Big and Visible
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => EmergencySosScreen(),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            width: double.infinity,
+                            padding: EdgeInsets.symmetric(
+                              vertical: Responsive.spacing(context, 24),
+                              horizontal: Responsive.spacing(context, 20),
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.red.withOpacity(0.6),
+                                  blurRadius: 30,
+                                  spreadRadius: 4,
+                                  offset: Offset(0, 6),
+                                )
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: EdgeInsets.all(Responsive.spacing(context, 12)),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withOpacity(0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    Icons.emergency,
+                                    color: Colors.white,
+                                    size: Responsive.iconSize(context, 32),
+                                  ),
+                                ),
+                                SizedBox(width: Responsive.spacing(context, 16)),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        "EMERGENCY SOS",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: Responsive.fontSize(context, 20),
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 1.2,
+                                        ),
+                                      ),
+                                      SizedBox(height: Responsive.spacing(context, 4)),
+                                      Text(
+                                        "Request Immediate Help",
+                                        style: TextStyle(
+                                          color: Colors.white.withOpacity(0.9),
+                                          fontSize: Responsive.fontSize(context, 15),
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      )
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        SizedBox(height: Responsive.spacing(context, 25)),
+
+                        Text(
+                          "Emergency Service Categories",
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 18),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+
+                        SizedBox(height: Responsive.spacing(context, 15)),
+
+                        // Main Services Grid - Responsive
+                        GridView.count(
+                          crossAxisCount: Responsive.gridCrossAxisCount(
+                            context,
+                            mobile: 2,
+                            tablet: 3,
+                            desktop: 4,
+                          ),
+                          shrinkWrap: true,
+                          physics: NeverScrollableScrollPhysics(),
+                          crossAxisSpacing: Responsive.spacing(context, 12),
+                          mainAxisSpacing: Responsive.spacing(context, 12),
+                          childAspectRatio: Responsive.gridAspectRatio(
+                            context,
+                            mobile: 1.5,
+                            tablet: 1.3,
+                            desktop: 1.2,
+                          ),
+                          children: [
+                            serviceCard(context, Icons.local_hospital, "Medical Help"),
+                            serviceCard(context, Icons.bloodtype, "Blood Donation"),
+                            serviceCard(context, Icons.car_crash, "Accident Help"),
+                            serviceCard(context, Icons.emergency, "Ambulance"),
+                            serviceCard(context, Icons.build, "Mechanic Help"),
+                            serviceCard(context, Icons.electrical_services, "Electrician"),
+                            serviceCard(context, Icons.people, "Volunteer Help"),
+                            serviceCard(context, Icons.local_fire_department, "Fire Emergency"),
+                          ],
+                        ),
+
+                        SizedBox(height: Responsive.spacing(context, 25)),
+
+                        // Nearby Requests Section
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              "Nearby Requests",
+                              style: TextStyle(
+                                fontSize: Responsive.fontSize(context, 18),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            if (isLoadingRequests)
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.red),
+                                ),
+                              )
+                            else
+                              IconButton(
+                                icon: Icon(Icons.refresh, color: Colors.red),
+                                onPressed: _loadNearbyRequests,
+                                tooltip: 'Refresh',
+                              ),
+                          ],
+                        ),
+                        SizedBox(height: Responsive.spacing(context, 15)),
+                        if (isLoadingRequests)
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(Responsive.spacing(context, 20)),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        else if (nearbyRequests.isEmpty)
+                          Container(
+                            padding: EdgeInsets.all(Responsive.spacing(context, 20)),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.location_off,
+                                    size: Responsive.iconSize(context, 48),
+                                    color: Colors.grey,
+                                  ),
+                                  SizedBox(height: Responsive.spacing(context, 8)),
+                                  Text(
+                                    'No nearby requests found',
+                                    style: TextStyle(
+                                      fontSize: Responsive.fontSize(context, 14),
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                  SizedBox(height: Responsive.spacing(context, 4)),
+                                  Text(
+                                    'Check back later or refresh',
+                                    style: TextStyle(
+                                      fontSize: Responsive.fontSize(context, 12),
+                                      color: Colors.grey[500],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          ...nearbyRequests.map((request) {
+                            return _buildNearbyRequestCard(context, request);
+                          }).toList(),
+                        SizedBox(height: Responsive.spacing(context, 20)),
                       ],
                     ),
-                  ),
-                ),
-
-                SizedBox(height: 25),
-
-                Text(
-                  "Emergency Service Categories",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                SizedBox(height: 15),
-
-                // Main Services Grid (2x3)
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.5,
-                  children: [
-                    serviceCard(Icons.local_hospital, "Medical Help"),
-                    serviceCard(Icons.bloodtype, "Blood Donation"),
-                    serviceCard(Icons.car_crash, "Accident Help"),
-                    serviceCard(Icons.emergency, "Ambulance"),
-                    serviceCard(Icons.build, "Mechanic Help"),
-                    serviceCard(Icons.electrical_services, "Electrician"),
-                  ],
-                ),
-
-                SizedBox(height: 20),
-
-                // Optional Extra Services
-                GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: NeverScrollableScrollPhysics(),
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  childAspectRatio: 1.5,
-                  children: [
-                    serviceCard(Icons.people, "Volunteer Help"),
-                    serviceCard(Icons.local_fire_department, "Fire Emergency"),
-                  ],
-                ),
-                SizedBox(height: 25),
-
-                //nearby request section //
-                Text("Nearby Requests", style: TextStyle(fontSize: 18 , fontWeight: FontWeight.bold,),),
-                SizedBox(height: 15),
-                Column(
-                  children: [
-                    requestCard(
-                      "Blood needed",
-                      "O+ required",
-                      "2 Km",
-                      Icons.bloodtype,
-                      Colors.red,
-                    ),
-                  ],
-                )
-
-                    ],
                   ),
                 ),
               ),
@@ -273,22 +439,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        selectedItemColor: Colors.red,
-        unselectedItemColor: Colors.grey,
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.home),label: "Home"),
-          BottomNavigationBarItem(icon: Icon(Icons.location_on),label: "Map"),
-          BottomNavigationBarItem(icon: Icon(Icons.request_page),label: "Request"),
-          BottomNavigationBarItem(icon: Icon(Icons.person),label: "Profile"),
-        ],
-      ),
     );
   }
 
   // ✅ SERVICE CARD WIDGET
-  Widget serviceCard(IconData icon, String title) {
+  Widget serviceCard(BuildContext context, IconData icon, String title) {
     return GestureDetector(
       onTap: () {
         // Navigate to service-specific screen
@@ -349,81 +504,215 @@ class _HomeScreenState extends State<HomeScreen> {
             BoxShadow(
               color: Colors.black12,
               blurRadius: 6,
-              offset: Offset(0,2),
+              offset: Offset(0, 2),
             )
           ],
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, size: 32, color: Colors.red),
-            SizedBox(height: 10),
-            Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.w500,
-                fontSize: 14,
+            Icon(
+              icon,
+              size: Responsive.iconSize(context, 32),
+              color: Colors.red,
+            ),
+            SizedBox(height: Responsive.spacing(context, 10)),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: Responsive.fontSize(context, 14),
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              textAlign: TextAlign.center,
             ),
           ],
         ),
       ),
     );
   }
-  // ✅ REQUEST CARD WIDGET //
-  Widget requestCard(String title, String description, String distance, IconData icon, Color color){
-    return Container(
-      padding: EdgeInsets.all(14),
-      decoration: BoxDecoration(
+
+  // ✅ NEARBY REQUEST CARD WIDGET //
+  Widget _buildNearbyRequestCard(BuildContext context, dynamic request) {
+    // Get icon and color based on request type
+    IconData icon;
+    Color color;
+    
+    switch (request['typeCode']) {
+      case 'medical':
+        icon = Icons.local_hospital;
+        color = Colors.blue;
+        break;
+      case 'blood':
+        icon = Icons.bloodtype;
+        color = Colors.red;
+        break;
+      case 'accident':
+        icon = Icons.car_crash;
+        color = Colors.orange;
+        break;
+      case 'ambulance':
+        icon = Icons.emergency;
+        color = Colors.red;
+        break;
+      case 'mechanic':
+        icon = Icons.build;
+        color = Colors.brown;
+        break;
+      case 'electrician':
+        icon = Icons.electrical_services;
+        color = Colors.yellow.shade700;
+        break;
+      case 'volunteer':
+        icon = Icons.people;
+        color = Colors.green;
+        break;
+      case 'fire':
+        icon = Icons.local_fire_department;
+        color = Colors.red.shade700;
+        break;
+      default:
+        icon = Icons.help_outline;
+        color = Colors.grey;
+    }
+
+    // Format distance
+    final distance = request['distance'] ?? 0.0;
+    String distanceText;
+    if (distance < 1) {
+      distanceText = '${(distance * 1000).toStringAsFixed(0)}m away';
+    } else {
+      distanceText = '${distance.toStringAsFixed(1)} km away';
+    }
+
+    // Format time posted
+    String timeText = 'Just now';
+    if (request['createdAt'] != null) {
+      try {
+        final createdAt = DateTime.parse(request['createdAt']);
+        final now = DateTime.now();
+        final difference = now.difference(createdAt);
+        
+        if (difference.inMinutes < 1) {
+          timeText = 'Just now';
+        } else if (difference.inMinutes < 60) {
+          timeText = '${difference.inMinutes} min ago';
+        } else if (difference.inHours < 24) {
+          timeText = '${difference.inHours} hour${difference.inHours > 1 ? 's' : ''} ago';
+        } else {
+          timeText = '${difference.inDays} day${difference.inDays > 1 ? 's' : ''} ago';
+        }
+      } catch (e) {
+        timeText = 'Recently';
+      }
+    }
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => RequestDetailScreen(request: request),
+          ),
+        );
+      },
+      child: Container(
+        margin: EdgeInsets.only(bottom: Responsive.spacing(context, 12)),
+        padding: EdgeInsets.all(Responsive.spacing(context, 14)),
+        decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 6,
-              offset: Offset(0,2),
+              offset: Offset(0, 2),
             )
           ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              shape: BoxShape.circle,
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(Responsive.spacing(context, 10)),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                color: color,
+                size: Responsive.iconSize(context, 24),
+              ),
             ),
-            child: Icon(icon, color: color),
-          ),
-          SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold
-                  )
-
-                ),
-                SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey
-                  )
-                ),
-              ],
+            SizedBox(width: Responsive.spacing(context, 12)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    request['title'] ?? 'Emergency Request',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: Responsive.fontSize(context, 16),
+                    ),
+                  ),
+                  SizedBox(height: Responsive.spacing(context, 4)),
+                  Text(
+                    request['description'] ?? '',
+                    style: TextStyle(
+                      fontSize: Responsive.fontSize(context, 13),
+                      color: Colors.grey[700],
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: Responsive.spacing(context, 6)),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: Responsive.iconSize(context, 14),
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        distanceText,
+                        style: TextStyle(
+                          fontSize: Responsive.fontSize(context, 12),
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      SizedBox(width: Responsive.spacing(context, 12)),
+                      Icon(
+                        Icons.access_time,
+                        size: Responsive.iconSize(context, 14),
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        timeText,
+                        style: TextStyle(
+                          fontSize: Responsive.fontSize(context, 12),
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ]
+            Icon(
+              Icons.chevron_right,
+              color: Colors.grey[400],
+            ),
+          ],
+        ),
       ),
     );
-
-
   }
 
 }
