@@ -54,3 +54,9 @@ node_modules/
 helpnova_backend/node_modules/
 package-lock.json
 helpnova_backend/package-lock.json
+
+# Firebase Service Account Keys (NEVER commit these!)
+*-firebase-adminsdk-*.json
+service-account*.json
+firebase-adminsdk*.json
+helpnova_backend/*-firebase-adminsdk-*.json

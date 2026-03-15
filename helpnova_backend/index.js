@@ -32,6 +32,8 @@ app.use("/api/electrician", require("./routes/electricianRoutes"));
 app.use("/api/volunteer", require("./routes/volunteerRoutes"));
 app.use("/api/fire", require("./routes/fireEmergencyRoutes"));
 app.use("/api/nearby", require("./routes/nearbyRoutes"));
+app.use("/api/helpers", require("./routes/acceptedHelpersRoutes"));
+app.use("/api/emergency", require("./routes/emergencyRoutes"));
 
 // Health check endpoint
 app.get("/", (req, res) => {

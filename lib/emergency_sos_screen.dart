@@ -1,46 +1,198 @@
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'widgets/radar_map_panel.dart';
+import 'services/api_service.dart';
+import 'services/notification_service.dart';
 
-class EmergencySosScreen extends StatelessWidget {
+class EmergencySosScreen extends StatefulWidget {
   const EmergencySosScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Sample list of users who accepted the request
-    final acceptedUsers = [
-      {
-        'name': 'Karthik',
-        'skill': 'Medical Professional',
-        'distance': '0.5 km',
-        'phone': '+1 234-567-8901',
-        'bloodGroup': 'O+',
-        'status': 'On the way',
-      },
-      {
-        'name': 'anusha',
-        'skill': 'First Aid Certified',
-        'distance': '1.2 km',
-        'phone': '+1 234-567-8902',
-        'bloodGroup': 'A+',
-        'status': 'Accepted',
-      },
-      {
-        'name': 'Maria Garcia',
-        'skill': 'Nurse',
-        'distance': '0.8 km',
-        'phone': '+1 234-567-8903',
-        'bloodGroup': 'B+',
-        'status': 'Accepted',
-      },
-      {
-        'name': 'David Lee',
-        'skill': 'Paramedic',
-        'distance': '2.1 km',
-        'phone': '+1 234-567-8904',
-        'bloodGroup': 'AB+',
-        'status': 'Accepted',
-      },
-    ];
+  State<EmergencySosScreen> createState() => _EmergencySosScreenState();
+}
 
+class _EmergencySosScreenState extends State<EmergencySosScreen> {
+  double? userLatitude;
+  double? userLongitude;
+  bool isLoadingLocation = true;
+  bool isLoadingHelpers = false;
+  bool isSendingAlert = false;
+  List<Map<String, dynamic>> acceptedHelpers = [];
+  Map<String, dynamic>? requestInfo;
+
+  @override
+  void initState() {
+    super.initState();
+    _getUserLocation();
+  }
+
+  Future<void> _getUserLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        setState(() {
+          isLoadingLocation = false;
+        });
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() {
+            isLoadingLocation = false;
+          });
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          isLoadingLocation = false;
+        });
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        userLatitude = position.latitude;
+        userLongitude = position.longitude;
+        isLoadingLocation = false;
+      });
+      
+      // Fetch accepted helpers once location is available
+      _loadAcceptedHelpers();
+    } catch (e) {
+      print('Error getting location: $e');
+      setState(() {
+        isLoadingLocation = false;
+      });
+    }
+  }
+
+  Future<void> _loadAcceptedHelpers() async {
+    if (userLatitude == null || userLongitude == null) {
+      return;
+    }
+
+    setState(() {
+      isLoadingHelpers = true;
+    });
+
+    try {
+      final result = await ApiService.getAcceptedHelpers(
+        latitude: userLatitude,
+        longitude: userLongitude,
+      );
+
+      if (result['success'] == true) {
+        setState(() {
+          acceptedHelpers = List<Map<String, dynamic>>.from(result['helpers'] ?? []);
+          requestInfo = result['request'];
+          isLoadingHelpers = false;
+        });
+      } else {
+        setState(() {
+          acceptedHelpers = [];
+          isLoadingHelpers = false;
+        });
+        // Only show error message if it's not a "no requests" message
+        final message = result['message'] ?? '';
+        if (mounted && !message.toLowerCase().contains('no active') && !message.toLowerCase().contains('not found')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message.isNotEmpty ? message : 'Unable to load helpers'),
+              duration: Duration(seconds: 2),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      print('Error loading accepted helpers: $e');
+      setState(() {
+        acceptedHelpers = [];
+        isLoadingHelpers = false;
+      });
+    }
+  }
+
+  Future<void> _sendEmergencyAlert() async {
+    if (userLatitude == null || userLongitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Location not available. Please wait...'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      isSendingAlert = true;
+    });
+
+    try {
+      final result = await NotificationService.sendEmergencyAlert(
+        latitude: userLatitude!,
+        longitude: userLongitude!,
+        description: 'Emergency SOS request - Immediate help needed',
+      );
+
+      if (mounted) {
+        setState(() {
+          isSendingAlert = false;
+        });
+
+        if (result['success'] == true) {
+          final notifiedUsers = result['notifiedUsers'] ?? 0;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Emergency alert sent successfully! $notifiedUsers nearby helpers notified.',
+              ),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 3),
+            ),
+          );
+          
+          // Refresh accepted helpers after a short delay
+          Future.delayed(Duration(seconds: 2), () {
+            _loadAcceptedHelpers();
+          });
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Failed to send emergency alert'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          isSendingAlert = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error sending alert: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -105,6 +257,149 @@ class EmergencySosScreen extends StatelessWidget {
             ),
           ),
 
+          // Notification Alert Panel
+          if (userLatitude != null && userLongitude != null)
+            Container(
+              margin: EdgeInsets.all(16),
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.orange.shade300, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.orange.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.notifications_active, color: Colors.orange.shade700, size: 28),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Alert Nearby Helpers',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade900,
+                              ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Send push notification to nearby helpers',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.orange.shade800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isSendingAlert ? null : _sendEmergencyAlert,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.orange.shade700,
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 4,
+                      ),
+                      child: isSendingAlert
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Sending Alert...',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.send, size: 24),
+                                SizedBox(width: 8),
+                                Text(
+                                  'SEND ALERT TO NEARBY HELPERS',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          // Radar Map Panel
+          if (isLoadingLocation)
+            Container(
+              height: 300,
+              margin: EdgeInsets.all(16),
+              child: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else if (userLatitude != null && userLongitude != null)
+            RadarMapPanel(
+              userLatitude: userLatitude!,
+              userLongitude: userLongitude!,
+              helpers: acceptedHelpers,
+            )
+          else
+            Container(
+              height: 300,
+              margin: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[200],
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.location_off, size: 48, color: Colors.grey),
+                    SizedBox(height: 8),
+                    Text(
+                      'Location not available',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
           // Accepted Users List
           Expanded(
             child: Padding(
@@ -122,32 +417,105 @@ class EmergencySosScreen extends StatelessWidget {
                           fontWeight: FontWeight.bold,
                         ),
                       ),
-                      Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${acceptedUsers.length}',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 14,
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.refresh, color: Colors.blue),
+                            onPressed: _loadAcceptedHelpers,
+                            tooltip: 'Refresh',
                           ),
-                        ),
+                          Container(
+                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${acceptedHelpers.length}',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                   SizedBox(height: 16),
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: acceptedUsers.length,
-                      itemBuilder: (context, index) {
-                        final user = acceptedUsers[index];
-                        return _buildUserCard(user, context);
-                      },
-                    ),
+                    child: isLoadingHelpers
+                        ? Center(
+                            child: CircularProgressIndicator(),
+                          )
+                        : acceptedHelpers.isEmpty
+                            ? RefreshIndicator(
+                                onRefresh: _loadAcceptedHelpers,
+                                child: SingleChildScrollView(
+                                  physics: AlwaysScrollableScrollPhysics(),
+                                  child: Container(
+                                    height: MediaQuery.of(context).size.height * 0.4,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.people_outline,
+                                            size: 64,
+                                            color: Colors.grey[400],
+                                          ),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            'No helpers accepted yet',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.grey[600],
+                                            ),
+                                          ),
+                                          SizedBox(height: 8),
+                                          Text(
+                                            'Helpers will appear here once they accept your request',
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              color: Colors.grey[500],
+                                            ),
+                                            textAlign: TextAlign.center,
+                                          ),
+                                          SizedBox(height: 16),
+                                          Text(
+                                            'Pull down to refresh',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.grey[400],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _loadAcceptedHelpers,
+                                child: ListView.builder(
+                                  physics: AlwaysScrollableScrollPhysics(),
+                                  itemCount: acceptedHelpers.length,
+                                  itemBuilder: (context, index) {
+                                    final helper = acceptedHelpers[index];
+                                    // Convert dynamic map to string map for display
+                                    final userMap = <String, String>{
+                                      'name': helper['name']?.toString() ?? 'Helper',
+                                      'skill': helper['skill']?.toString() ?? 'Helper',
+                                      'distance': helper['distance']?.toString() ?? 'Unknown',
+                                      'phone': helper['phone']?.toString() ?? '',
+                                      'bloodGroup': helper['bloodGroup']?.toString() ?? '',
+                                      'status': helper['status']?.toString() ?? 'Accepted',
+                                    };
+                                    return _buildUserCard(userMap, context);
+                                  },
+                                ),
+                              ),
                   ),
                 ],
               ),
@@ -295,14 +663,32 @@ class EmergencySosScreen extends StatelessWidget {
               SizedBox(height: 8),
               // Call Button
               IconButton(
-                onPressed: () {
-                  // TODO: Implement call functionality
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Calling ${user['name']}...'),
-                      duration: Duration(seconds: 1),
-                    ),
-                  );
+                onPressed: () async {
+                  final phone = user['phone'];
+                  if (phone != null && phone.isNotEmpty) {
+                    final uri = Uri.parse('tel:$phone');
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri);
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Cannot make phone call'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      }
+                    }
+                  } else {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Phone number not available'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  }
                 },
                 icon: Container(
                   padding: EdgeInsets.all(10),

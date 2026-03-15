@@ -1,12 +1,104 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'services/api_service.dart';
+import 'services/geocoding_service.dart';
 import 'utils/responsive.dart';
 
-class RequestDetailScreen extends StatelessWidget {
+class RequestDetailScreen extends StatefulWidget {
   final dynamic request;
 
   const RequestDetailScreen({super.key, required this.request});
+
+  @override
+  State<RequestDetailScreen> createState() => _RequestDetailScreenState();
+}
+
+class _RequestDetailScreenState extends State<RequestDetailScreen> {
+  GoogleMapController? _mapController;
+  Set<Marker> _markers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _createMarker();
+  }
+
+  void _createMarker() {
+    final location = widget.request['location'];
+    if (location != null && location['latitude'] != null && location['longitude'] != null) {
+      final lat = location['latitude'] as double;
+      final lng = location['longitude'] as double;
+      final typeCode = widget.request['typeCode'] ?? '';
+      
+      // Get marker color based on request type
+      BitmapDescriptor markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+      switch (typeCode) {
+        case 'medical':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+          break;
+        case 'blood':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+          break;
+        case 'accident':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
+          break;
+        case 'ambulance':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+          break;
+        case 'mechanic':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
+          break;
+        case 'electrician':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
+          break;
+        case 'volunteer':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+          break;
+        case 'fire':
+          markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
+          break;
+      }
+
+      setState(() {
+        _markers = {
+          Marker(
+            markerId: MarkerId('request_location'),
+            position: LatLng(lat, lng),
+            icon: markerIcon,
+            infoWindow: InfoWindow(
+              title: widget.request['title'] ?? 'Emergency Location',
+              snippet: widget.request['description'] ?? '',
+            ),
+          ),
+        };
+      });
+    }
+  }
+
+  void _onMapCreated(GoogleMapController controller) {
+    _mapController = controller;
+    
+    // Center map on request location
+    final location = widget.request['location'];
+    if (location != null && location['latitude'] != null && location['longitude'] != null) {
+      final lat = location['latitude'] as double;
+      final lng = location['longitude'] as double;
+      
+      controller.animateCamera(
+        CameraUpdate.newLatLngZoom(
+          LatLng(lat, lng),
+          15.0,
+        ),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController?.dispose();
+    super.dispose();
+  }
 
   IconData _getIcon(String typeCode) {
     switch (typeCode) {
@@ -94,7 +186,7 @@ class RequestDetailScreen extends StatelessWidget {
   }
 
   Future<void> _callUser(BuildContext context) async {
-    final user = request['userId'];
+    final user = widget.request['userId'];
     if (user == null || user['phone'] == null) return;
 
     final phone = user['phone'];
@@ -110,7 +202,7 @@ class RequestDetailScreen extends StatelessWidget {
   }
 
   Future<void> _navigateToLocation(BuildContext context) async {
-    final location = request['location'];
+    final location = widget.request['location'];
     if (location == null) return;
 
     final lat = location['latitude'];
@@ -130,17 +222,17 @@ class RequestDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final icon = _getIcon(request['typeCode'] ?? '');
-    final color = _getColor(request['typeCode'] ?? '');
-    final distance = request['distance'] ?? 0.0;
+    final icon = _getIcon(widget.request['typeCode'] ?? '');
+    final color = _getColor(widget.request['typeCode'] ?? '');
+    final distance = widget.request['distance'] ?? 0.0;
     final distanceText = distance < 1
         ? '${(distance * 1000).toStringAsFixed(0)}m away'
         : '${distance.toStringAsFixed(1)} km away';
 
     String timeText = 'Just now';
-    if (request['createdAt'] != null) {
+    if (widget.request['createdAt'] != null) {
       try {
-        final createdAt = DateTime.parse(request['createdAt']);
+        final createdAt = DateTime.parse(widget.request['createdAt']);
         final now = DateTime.now();
         final difference = now.difference(createdAt);
         
@@ -158,8 +250,9 @@ class RequestDetailScreen extends StatelessWidget {
       }
     }
 
-    final user = request['userId'] ?? {};
-    final data = request['data'] ?? {};
+    final user = widget.request['userId'] ?? {};
+    final data = widget.request['data'] ?? {};
+    final location = widget.request['location'];
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -167,7 +260,7 @@ class RequestDetailScreen extends StatelessWidget {
         backgroundColor: color,
         elevation: 0,
         title: Text(
-          request['type'] ?? 'Emergency Request',
+          widget.request['type'] ?? 'Emergency Request',
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: Colors.white,
@@ -199,7 +292,7 @@ class RequestDetailScreen extends StatelessWidget {
                   ),
                   SizedBox(height: Responsive.spacing(context, 12)),
                   Text(
-                    request['title'] ?? 'Emergency Request',
+                    widget.request['title'] ?? 'Emergency Request',
                     style: TextStyle(
                       fontSize: Responsive.fontSize(context, 24),
                       fontWeight: FontWeight.bold,
@@ -238,6 +331,153 @@ class RequestDetailScreen extends StatelessWidget {
 
             SizedBox(height: Responsive.spacing(context, 20)),
 
+            // Location Address
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, 16)),
+              child: Container(
+                padding: EdgeInsets.all(Responsive.spacing(context, 16)),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.location_on, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Exact Location',
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 16),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: Responsive.spacing(context, 12)),
+                    FutureBuilder<String?>(
+                      future: () {
+                        if (location != null && location['latitude'] != null && location['longitude'] != null) {
+                          return GeocodingService.getAddressFromCoordinates(
+                            location['latitude'] as double,
+                            location['longitude'] as double,
+                          );
+                        }
+                        return Future.value(null);
+                      }(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Row(
+                            children: [
+                              SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                                ),
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'Loading address...',
+                                style: TextStyle(
+                                  fontSize: Responsive.fontSize(context, 14),
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        
+                        final address = snapshot.data;
+                        if (address != null && address.isNotEmpty) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  address,
+                                  style: TextStyle(
+                                    fontSize: Responsive.fontSize(context, 14),
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }
+                        
+                        // Fallback to coordinates
+                        if (location != null && location['latitude'] != null && location['longitude'] != null) {
+                          return Text(
+                            '${location['latitude']}, ${location['longitude']}',
+                            style: TextStyle(
+                              fontSize: Responsive.fontSize(context, 14),
+                              color: Colors.grey[600],
+                            ),
+                          );
+                        }
+                        
+                        return Text(
+                          'Location not available',
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 14),
+                            color: Colors.grey[500],
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SizedBox(height: Responsive.spacing(context, 16)),
+
+            // Map View
+            if (location != null && location['latitude'] != null && location['longitude'] != null)
+              Padding(
+                padding: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, 16)),
+                child: Container(
+                  height: 250,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black12,
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: GoogleMap(
+                      onMapCreated: _onMapCreated,
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(
+                          location['latitude'] as double,
+                          location['longitude'] as double,
+                        ),
+                        zoom: 15.0,
+                      ),
+                      markers: _markers,
+                      myLocationEnabled: true,
+                      myLocationButtonEnabled: true,
+                      mapType: MapType.normal,
+                      zoomControlsEnabled: true,
+                      compassEnabled: true,
+                    ),
+                  ),
+                ),
+              ),
+
+            if (location != null && location['latitude'] != null && location['longitude'] != null)
+              SizedBox(height: Responsive.spacing(context, 16)),
+
             // Description
             Padding(
               padding: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, 16)),
@@ -259,7 +499,7 @@ class RequestDetailScreen extends StatelessWidget {
                     ),
                     SizedBox(height: Responsive.spacing(context, 8)),
                     Text(
-                      request['description'] ?? 'No description provided',
+                      widget.request['description'] ?? 'No description provided',
                       style: TextStyle(
                         fontSize: Responsive.fontSize(context, 14),
                         color: Colors.grey[700],

@@ -36,6 +36,25 @@ const userSchema = new mongoose.Schema({
   locationAllowed: {
     type: Boolean,
     default: false
+  },
+  fcmToken: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  location: {
+    latitude: {
+      type: Number,
+      default: null
+    },
+    longitude: {
+      type: Number,
+      default: null
+    },
+    lastUpdated: {
+      type: Date,
+      default: null
+    }
   }
 }, {
   timestamps: true

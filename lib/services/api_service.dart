@@ -958,4 +958,289 @@ class ApiService {
       };
     }
   }
+
+  // Get accepted helpers for user's latest active request
+  static Future<Map<String, dynamic>> getAcceptedHelpers({
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+          'helpers': [],
+        };
+      }
+
+      String url = '$baseUrl/helpers/my-latest-request/helpers';
+      if (latitude != null && longitude != null) {
+        url += '?latitude=$latitude&longitude=$longitude';
+      }
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Connection timeout. Please check if the server is running.');
+        },
+      );
+
+      // Handle 404 - endpoint might not exist on deployed backend
+      if (response.statusCode == 404) {
+        return {
+          'success': false,
+          'message': 'Feature not available. Please update backend or check if you have any active requests.',
+          'helpers': [],
+        };
+      }
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+          'helpers': [],
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'helpers': data['helpers'] ?? [],
+          'request': data['request'],
+          'message': data['message'] ?? 'Helpers fetched successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch accepted helpers',
+          'helpers': [],
+        };
+      }
+    } on http.ClientException {
+      return {
+        'success': false,
+        'message': 'Cannot connect to server. Please make sure the backend server is running.',
+        'helpers': [],
+      };
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+        'helpers': [],
+      };
+    }
+  }
+
+  // Update FCM token
+  static Future<Map<String, dynamic>> updateFcmToken(String fcmToken) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/update-fcm-token'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'fcmToken': fcmToken,
+        }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'FCM token updated successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to update FCM token',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error updating FCM token: ${e.toString()}',
+      };
+    }
+  }
+
+  // Update user location
+  static Future<Map<String, dynamic>> updateUserLocation({
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/update-location'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'latitude': latitude,
+          'longitude': longitude,
+        }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Location updated successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to update location',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
+  // Send emergency notification to nearby users
+  static Future<Map<String, dynamic>> sendEmergencyNotification({
+    required double latitude,
+    required double longitude,
+    String? description,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/emergency/send-alert'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'latitude': latitude,
+          'longitude': longitude,
+          'description': description ?? 'Emergency SOS request',
+        }),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Emergency alert sent successfully',
+          'notifiedUsers': data['notifiedUsers'] ?? 0,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to send emergency alert',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
 }

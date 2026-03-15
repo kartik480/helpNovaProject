@@ -220,4 +220,116 @@ router.get("/profile", async (req, res) => {
   }
 });
 
+// Update FCM Token (protected route)
+router.post("/update-fcm-token", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ 
+        message: "No token provided",
+        success: false 
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({ 
+        message: "FCM token is required",
+        success: false 
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      decoded.userId,
+      { fcmToken: fcmToken },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found",
+        success: false 
+      });
+    }
+
+    res.json({ 
+      success: true,
+      message: "FCM token updated successfully"
+    });
+
+  } catch (error) {
+    console.error("Update FCM token error:", error);
+    res.status(401).json({ 
+      message: "Invalid or expired token",
+      success: false 
+    });
+  }
+});
+
+// Update User Location (protected route)
+router.post("/update-location", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ 
+        message: "No token provided",
+        success: false 
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    const { latitude, longitude } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({ 
+        message: "Latitude and longitude are required",
+        success: false 
+      });
+    }
+
+    // Validate coordinates
+    if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+      return res.status(400).json({ 
+        message: "Invalid coordinates",
+        success: false 
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      decoded.userId,
+      { 
+        location: {
+          latitude: latitude,
+          longitude: longitude,
+          lastUpdated: new Date()
+        }
+      },
+      { new: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found",
+        success: false 
+      });
+    }
+
+    res.json({ 
+      success: true,
+      message: "Location updated successfully"
+    });
+
+  } catch (error) {
+    console.error("Update location error:", error);
+    res.status(401).json({ 
+      message: "Invalid or expired token",
+      success: false 
+    });
+  }
+});
+
 module.exports = router;

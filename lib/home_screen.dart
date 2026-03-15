@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'profile_screen.dart';
 import 'services/api_service.dart';
+import 'services/geocoding_service.dart';
 import 'emergency_sos_screen.dart';
 import 'medical_help_screen.dart';
 import 'blood_donation_screen.dart';
@@ -88,9 +89,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         userLongitude = position.longitude;
       });
 
+      // Update user location in backend for emergency notifications
+      _updateUserLocationInBackend(position.latitude, position.longitude);
+
       _loadNearbyRequests();
     } catch (e) {
       print('Error getting location: $e');
+    }
+  }
+
+  Future<void> _updateUserLocationInBackend(double latitude, double longitude) async {
+    try {
+      // Update location in backend (silently, don't show errors to user)
+      await ApiService.updateUserLocation(
+        latitude: latitude,
+        longitude: longitude,
+      );
+      print('[HomeScreen] User location updated in backend');
+    } catch (e) {
+      // Silently fail - location update is not critical for app functionality
+      print('[HomeScreen] Failed to update location in backend: $e');
     }
   }
 
@@ -671,22 +689,89 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     overflow: TextOverflow.ellipsis,
                   ),
                   SizedBox(height: Responsive.spacing(context, 6)),
+                  // Address from coordinates
+                  FutureBuilder<String?>(
+                    future: () {
+                      final location = request['location'];
+                      if (location != null && location['latitude'] != null && location['longitude'] != null) {
+                        return GeocodingService.getShortAddress(
+                          location['latitude'] as double,
+                          location['longitude'] as double,
+                        );
+                      }
+                      return Future.value(null);
+                    }(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: Responsive.iconSize(context, 14),
+                              color: Colors.grey[400],
+                            ),
+                            SizedBox(width: 4),
+                            SizedBox(
+                              width: 12,
+                              height: 12,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(Colors.grey[400]!),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      
+                      final address = snapshot.data;
+                      if (address != null && address.isNotEmpty) {
+                        return Row(
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: Responsive.iconSize(context, 14),
+                              color: Colors.red,
+                            ),
+                            SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                address,
+                                style: TextStyle(
+                                  fontSize: Responsive.fontSize(context, 12),
+                                  color: Colors.grey[700],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+                      
+                      // Fallback to distance if address not available
+                      return Row(
+                        children: [
+                          Icon(
+                            Icons.location_on,
+                            size: Responsive.iconSize(context, 14),
+                            color: Colors.grey[600],
+                          ),
+                          SizedBox(width: 4),
+                          Text(
+                            distanceText,
+                            style: TextStyle(
+                              fontSize: Responsive.fontSize(context, 12),
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  SizedBox(height: Responsive.spacing(context, 4)),
                   Row(
                     children: [
-                      Icon(
-                        Icons.location_on,
-                        size: Responsive.iconSize(context, 14),
-                        color: Colors.grey[600],
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        distanceText,
-                        style: TextStyle(
-                          fontSize: Responsive.fontSize(context, 12),
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      SizedBox(width: Responsive.spacing(context, 12)),
                       Icon(
                         Icons.access_time,
                         size: Responsive.iconSize(context, 14),
@@ -695,6 +780,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       SizedBox(width: 4),
                       Text(
                         timeText,
+                        style: TextStyle(
+                          fontSize: Responsive.fontSize(context, 12),
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      SizedBox(width: Responsive.spacing(context, 8)),
+                      Icon(
+                        Icons.straighten,
+                        size: Responsive.iconSize(context, 14),
+                        color: Colors.grey[600],
+                      ),
+                      SizedBox(width: 4),
+                      Text(
+                        distanceText,
                         style: TextStyle(
                           fontSize: Responsive.fontSize(context, 12),
                           color: Colors.grey[600],
