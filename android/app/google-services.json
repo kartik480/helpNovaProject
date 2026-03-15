@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "180526070893",
+    "project_id": "helpnovaproject",
+    "storage_bucket": "helpnovaproject.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:180526070893:android:afef406a18d6e9816bd364",
+        "android_client_info": {
+          "package_name": "com.example.helpnovaproject"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCnQSFvxZuRrb6W03fqn4Wvgdnl7mvpYRg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
