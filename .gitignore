@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Environment variables
+.env
+*.env
+helpnova_backend/.env
+
+# Node.js
+node_modules/
+helpnova_backend/node_modules/
+package-lock.json
+helpnova_backend/package-lock.json
