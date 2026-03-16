@@ -420,12 +420,14 @@ class NotificationService {
   static Future<Map<String, dynamic>> sendEmergencyAlert({
     required double latitude,
     required double longitude,
+    String? address,
     String? description,
   }) async {
     try {
       final result = await ApiService.sendEmergencyNotification(
         latitude: latitude,
         longitude: longitude,
+        address: address,
         description: description,
       );
       return result;

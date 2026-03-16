@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'services/api_service.dart';
+import 'services/geocoding_service.dart';
+import 'widgets/map_search_widget.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -21,6 +22,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _locationEnabled = false;
   double? _latitude;
   double? _longitude;
+  String? _address; // Store selected address
   String? _errorMessage;
 
   @override
@@ -57,6 +59,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         if (user['location'] != null) {
           _latitude = user['location']['latitude']?.toDouble();
           _longitude = user['location']['longitude']?.toDouble();
+          
+          // Get address from coordinates
+          if (_latitude != null && _longitude != null) {
+            _address = await GeocodingService.getAddressFromCoordinates(
+              _latitude!,
+              _longitude!,
+            );
+          }
         }
       }
     } catch (e) {
@@ -70,62 +80,50 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
-  Future<void> _getCurrentLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() {
-          _errorMessage = 'Location services are disabled. Please enable them in settings.';
-        });
-        return;
-      }
+  void _openMapSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapSearchWidget(
+          initialLatitude: _latitude,
+          initialLongitude: _longitude,
+          initialAddress: _address,
+          onLocationSelected: (latitude, longitude, address) async {
+            setState(() {
+              _latitude = latitude;
+              _longitude = longitude;
+              _address = address;
+              _locationEnabled = true;
+              _errorMessage = null;
+            });
 
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() {
-            _errorMessage = 'Location permission denied.';
-          });
-          return;
-        }
-      }
+            // Immediately update location in backend
+            try {
+              await ApiService.updateUserLocation(
+                latitude: latitude,
+                longitude: longitude,
+                address: address,
+              );
 
-      if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          _errorMessage = 'Location permission permanently denied. Please enable in settings.';
-        });
-        return;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      setState(() {
-        _latitude = position.latitude;
-        _longitude = position.longitude;
-        _locationEnabled = true;
-        _errorMessage = null;
-      });
-
-      // Immediately update location in backend
-      await ApiService.updateUserLocation(
-        latitude: position.latitude,
-        longitude: position.longitude,
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Location updated successfully'),
-          backgroundColor: Colors.green,
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Location updated successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            } catch (e) {
+              if (mounted) {
+                setState(() {
+                  _errorMessage = 'Error updating location: ${e.toString()}';
+                });
+              }
+            }
+          },
         ),
-      );
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error getting location: ${e.toString()}';
-      });
-    }
+      ),
+    );
   }
 
   Future<void> _saveProfile() async {
@@ -146,6 +144,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         skill: _skillController.text.trim(),
         latitude: _latitude,
         longitude: _longitude,
+        address: _address,
         locationAllowed: _locationEnabled,
       );
 
@@ -326,12 +325,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 value: _locationEnabled,
                                 onChanged: (value) {
                                   if (value) {
-                                    _getCurrentLocation();
+                                    _openMapSearch();
                                   } else {
                                     setState(() {
                                       _locationEnabled = false;
                                       _latitude = null;
                                       _longitude = null;
+                                      _address = null;
                                     });
                                   }
                                 },
@@ -340,29 +340,40 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             ],
                           ),
                           SizedBox(height: 8),
-                          if (_locationEnabled && _latitude != null && _longitude != null)
+                          if (_locationEnabled && _address != null)
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'Latitude: ${_latitude!.toStringAsFixed(6)}',
+                                  'Address:',
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: Colors.grey[700],
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
+                                SizedBox(height: 4),
                                 Text(
-                                  'Longitude: ${_longitude!.toStringAsFixed(6)}',
+                                  _address!,
                                   style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey[700],
+                                    fontSize: 14,
+                                    color: Colors.black87,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Lat: ${_latitude!.toStringAsFixed(6)}, Lng: ${_longitude!.toStringAsFixed(6)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.grey[600],
                                   ),
                                 ),
                               ],
                             )
                           else if (_locationEnabled)
                             Text(
-                              'Getting location...',
+                              'Please select a location',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: Colors.orange,
@@ -379,13 +390,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           if (_locationEnabled)
                             SizedBox(height: 8),
                           if (_locationEnabled)
-                            ElevatedButton.icon(
-                              onPressed: _getCurrentLocation,
-                              icon: Icon(Icons.refresh, size: 18),
-                              label: Text('Update Location'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.blue,
-                                foregroundColor: Colors.white,
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _openMapSearch,
+                                icon: Icon(Icons.map, size: 18),
+                                label: Text('Set Location on Map'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
                               ),
                             ),
                         ],

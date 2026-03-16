@@ -50,20 +50,30 @@ class ApiService {
     required String bloodGroup,
     required String skill,
     required bool locationAllowed,
+    double? latitude,
+    double? longitude,
   }) async {
     try {
+      final body = {
+        'name': name,
+        'email': email,
+        'password': password,
+        'phone': phone,
+        'bloodGroup': bloodGroup,
+        'skill': skill,
+        'locationAllowed': locationAllowed,
+      };
+      
+      // Add location if provided
+      if (locationAllowed && latitude != null && longitude != null) {
+        body['latitude'] = latitude;
+        body['longitude'] = longitude;
+      }
+      
       final response = await http.post(
         Uri.parse('$baseUrl/auth/signup'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'name': name,
-          'email': email,
-          'password': password,
-          'phone': phone,
-          'bloodGroup': bloodGroup,
-          'skill': skill,
-          'locationAllowed': locationAllowed,
-        }),
+        body: jsonEncode(body),
       ).timeout(
         Duration(seconds: 10),
         onTimeout: () {
@@ -1109,6 +1119,7 @@ class ApiService {
   static Future<Map<String, dynamic>> updateUserLocation({
     required double latitude,
     required double longitude,
+    String? address,
   }) async {
     try {
       final token = await getToken();
@@ -1128,6 +1139,7 @@ class ApiService {
         body: jsonEncode({
           'latitude': latitude,
           'longitude': longitude,
+          'address': address,
         }),
       ).timeout(
         const Duration(seconds: 10),
@@ -1177,6 +1189,7 @@ class ApiService {
   static Future<Map<String, dynamic>> sendEmergencyNotification({
     required double latitude,
     required double longitude,
+    String? address,
     String? description,
   }) async {
     try {
@@ -1197,6 +1210,7 @@ class ApiService {
         body: jsonEncode({
           'latitude': latitude,
           'longitude': longitude,
+          'address': address,
           'description': description ?? 'Emergency SOS request',
         }),
       ).timeout(
@@ -1517,6 +1531,7 @@ class ApiService {
     String? skill,
     double? latitude,
     double? longitude,
+    String? address,
     bool? locationAllowed,
   }) async {
     try {
@@ -1535,6 +1550,7 @@ class ApiService {
       if (skill != null) body['skill'] = skill;
       if (latitude != null) body['latitude'] = latitude;
       if (longitude != null) body['longitude'] = longitude;
+      if (address != null) body['address'] = address;
       if (locationAllowed != null) body['locationAllowed'] = locationAllowed;
 
       final response = await http.put(

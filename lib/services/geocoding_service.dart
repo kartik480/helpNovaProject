@@ -5,6 +5,7 @@ class GeocodingService {
   // Google Maps API Key (same as used in AndroidManifest)
   static const String _apiKey = 'AIzaSyBSt7L3j1Gtxi_nNhXz8pTcxCXv6niBieg';
   static const String _geocodingBaseUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
+  static const String _placesBaseUrl = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
 
   // Cache to avoid repeated API calls for same coordinates
   static final Map<String, String> _addressCache = {};
@@ -96,6 +97,103 @@ class GeocodingService {
   /// Clear the address cache
   static void clearCache() {
     _addressCache.clear();
+  }
+
+  /// Search for addresses using Google Places Autocomplete API
+  /// Returns a list of address suggestions with their coordinates
+  static Future<List<Map<String, dynamic>>> searchAddresses(String query) async {
+    if (query.isEmpty) return [];
+    
+    try {
+      final url = Uri.parse(
+        '$_placesBaseUrl?input=${Uri.encodeComponent(query)}&key=$_apiKey',
+      );
+
+      final response = await http.get(url).timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Places Autocomplete request timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        if (data['status'] == 'OK' && data['predictions'] != null) {
+          final predictions = data['predictions'] as List;
+          
+          List<Map<String, dynamic>> results = [];
+          for (var prediction in predictions) {
+            final description = prediction['description'] as String?;
+            final placeId = prediction['place_id'] as String?;
+            
+            if (description != null && placeId != null) {
+              // Get coordinates for this place
+              final coords = await _getPlaceCoordinates(placeId);
+              if (coords != null) {
+                results.add({
+                  'address': description,
+                  'placeId': placeId,
+                  'latitude': coords['lat'],
+                  'longitude': coords['lng'],
+                });
+              }
+            }
+          }
+          
+          return results;
+        } else if (data['status'] == 'ZERO_RESULTS') {
+          return [];
+        } else {
+          print('Places Autocomplete API error: ${data['status']}');
+        }
+      } else {
+        print('Places Autocomplete API HTTP error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Places Autocomplete error: $e');
+    }
+    
+    return [];
+  }
+
+  /// Get coordinates for a place using Place Details API
+  static Future<Map<String, double>?> _getPlaceCoordinates(String placeId) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=geometry&key=$_apiKey',
+      );
+
+      final response = await http.get(url).timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Place Details request timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        if (data['status'] == 'OK' && data['result'] != null) {
+          final result = data['result'] as Map<String, dynamic>;
+          final geometry = result['geometry'] as Map<String, dynamic>?;
+          final location = geometry?['location'] as Map<String, dynamic>?;
+          
+          if (location != null) {
+            final lat = location['lat'] as double?;
+            final lng = location['lng'] as double?;
+            
+            if (lat != null && lng != null) {
+              return {'lat': lat, 'lng': lng};
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Place Details error: $e');
+    }
+    
+    return null;
   }
 
   /// Calculate road distance between two coordinates using Google Maps Distance Matrix API

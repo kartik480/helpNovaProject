@@ -14,7 +14,7 @@ const generateToken = (userId) => {
 
 // SIGNUP
 router.post("/signup", async (req, res) => {
-  const { name, email, password, phone, bloodGroup, skill, locationAllowed } = req.body;
+  const { name, email, password, phone, bloodGroup, skill, locationAllowed, latitude, longitude, address } = req.body;
 
   // Validation
   if (!name || !email || !password || !phone || !bloodGroup || !skill) {
@@ -55,7 +55,7 @@ router.post("/signup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
-    const user = new User({
+    const userData = {
       name,
       email,
       password: hashedPassword,
@@ -63,8 +63,22 @@ router.post("/signup", async (req, res) => {
       bloodGroup,
       skill,
       locationAllowed: locationAllowed || false
-    });
+    };
 
+    // Add location if provided
+    if (locationAllowed && latitude !== undefined && longitude !== undefined) {
+      // Validate coordinates
+      if (latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
+        userData.location = {
+          latitude: latitude,
+          longitude: longitude,
+          address: address || null,
+          lastUpdated: new Date()
+        };
+      }
+    }
+
+    const user = new User(userData);
     await user.save();
 
     // Generate token
@@ -207,7 +221,8 @@ router.get("/profile", async (req, res) => {
         phone: user.phone,
         bloodGroup: user.bloodGroup,
         skill: user.skill,
-        locationAllowed: user.locationAllowed
+        locationAllowed: user.locationAllowed,
+        location: user.location
       }
     });
 
@@ -269,7 +284,7 @@ router.post("/update-fcm-token", async (req, res) => {
   }
 });
 
-// Update User Location (protected route)
+    // Update User Location (protected route)
 router.post("/update-location", async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -282,7 +297,7 @@ router.post("/update-location", async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
-    const { latitude, longitude } = req.body;
+    const { latitude, longitude, address } = req.body;
 
     if (!latitude || !longitude) {
       return res.status(400).json({ 
@@ -306,6 +321,7 @@ router.post("/update-location", async (req, res) => {
         location: {
           latitude: latitude,
           longitude: longitude,
+          address: address || null,
           lastUpdated: new Date()
         }
       },
@@ -375,6 +391,7 @@ router.get("/active-users", async (req, res) => {
       phone: user.phone,
       latitude: user.location?.latitude,
       longitude: user.location?.longitude,
+      address: user.location?.address,
       lastUpdated: user.location?.lastUpdated,
       locationAllowed: user.locationAllowed
     }));
@@ -414,7 +431,7 @@ router.put("/update-profile", async (req, res) => {
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
-    const { name, phone, bloodGroup, skill, latitude, longitude, locationAllowed } = req.body;
+    const { name, phone, bloodGroup, skill, latitude, longitude, address, locationAllowed } = req.body;
 
     // Build update object
     const updateData = {};
@@ -437,6 +454,7 @@ router.put("/update-profile", async (req, res) => {
       updateData.location = {
         latitude: latitude,
         longitude: longitude,
+        address: address || null,
         lastUpdated: new Date()
       };
       

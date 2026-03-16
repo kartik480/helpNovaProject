@@ -51,6 +51,11 @@ const userSchema = new mongoose.Schema({
       type: Number,
       default: null
     },
+    address: {
+      type: String,
+      default: null,
+      trim: true
+    },
     lastUpdated: {
       type: Date,
       default: null

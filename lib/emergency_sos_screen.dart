@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'widgets/radar_map_panel.dart';
+import 'widgets/map_search_widget.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
 import 'services/geocoding_service.dart';
@@ -18,9 +18,11 @@ class EmergencySosScreen extends StatefulWidget {
 class _EmergencySosScreenState extends State<EmergencySosScreen> {
   double? userLatitude;
   double? userLongitude;
+  String? userAddress; // Store selected address
   bool isLoadingLocation = true;
   bool isLoadingHelpers = false;
   bool isSendingAlert = false;
+  bool isLocationSet = false; // Track if location has been set via map search
   List<Map<String, dynamic>> acceptedHelpers = [];
   List<Map<String, dynamic>> helperLocations = []; // Real-time helper locations
   List<Map<String, dynamic>> activeUsers = []; // All active users with location enabled
@@ -34,7 +36,10 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   @override
   void initState() {
     super.initState();
-    _getUserLocation();
+    // Don't auto-get location, wait for user to set it via map search
+    setState(() {
+      isLoadingLocation = false;
+    });
   }
 
   @override
@@ -177,58 +182,6 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     }
   }
 
-  Future<void> _getUserLocation() async {
-    try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        setState(() {
-          isLoadingLocation = false;
-        });
-        return;
-      }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          setState(() {
-            isLoadingLocation = false;
-          });
-          return;
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        setState(() {
-          isLoadingLocation = false;
-        });
-        return;
-      }
-
-      Position position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-
-      setState(() {
-        userLatitude = position.latitude;
-        userLongitude = position.longitude;
-        isLoadingLocation = false;
-      });
-      
-      // Fetch accepted helpers once location is available
-      _loadAcceptedHelpers();
-      _loadHelperLocations();
-      _loadActiveUsers();
-      _startPeriodicUpdates();
-      // Update nearby helpers after location is available
-      _updateNearbyHelpers();
-    } catch (e) {
-      print('Error getting location: $e');
-      setState(() {
-        isLoadingLocation = false;
-      });
-    }
-  }
 
   // Start periodic updates for helper locations and active users
   void _startPeriodicUpdates() {
@@ -388,6 +341,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       final result = await NotificationService.sendEmergencyAlert(
         latitude: userLatitude!,
         longitude: userLongitude!,
+        address: userAddress,
         description: 'Emergency SOS request - Immediate help needed',
       );
 
@@ -470,8 +424,71 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     }
   }
 
+  void _onLocationSelected(double latitude, double longitude, String address) {
+    setState(() {
+      userLatitude = latitude;
+      userLongitude = longitude;
+      userAddress = address;
+      isLocationSet = true;
+    });
+    
+    // Fetch accepted helpers once location is available
+    _loadAcceptedHelpers();
+    _loadHelperLocations();
+    _loadActiveUsers();
+    _startPeriodicUpdates();
+    // Update nearby helpers after location is available
+    _updateNearbyHelpers();
+  }
+
+  void _openMapSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapSearchWidget(
+          initialLatitude: userLatitude,
+          initialLongitude: userLongitude,
+          initialAddress: userAddress,
+          onLocationSelected: _onLocationSelected,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // If location is not set, navigate to map search widget
+    if (!isLocationSet) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openMapSearch();
+      });
+      
+      return Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          backgroundColor: Colors.red,
+          elevation: 0,
+          leading: IconButton(
+            icon: Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            'Emergency SOS',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+              fontSize: 20,
+            ),
+          ),
+          centerTitle: true,
+        ),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    // Location is set, show the main emergency SOS screen
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -490,6 +507,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(Icons.edit_location, color: Colors.white),
+            onPressed: _openMapSearch,
+            tooltip: 'Change location',
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         physics: AlwaysScrollableScrollPhysics(),
@@ -643,16 +667,58 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               ),
             ),
 
-          // Radar Map Panel
-          if (isLoadingLocation)
+          // Selected Address Display
+          if (userAddress != null)
             Container(
-              height: 300,
-              margin: EdgeInsets.all(16),
-              child: Center(
-                child: CircularProgressIndicator(),
+              margin: EdgeInsets.symmetric(horizontal: Responsive.spacing(context, 16)),
+              padding: EdgeInsets.all(Responsive.spacing(context, 16)),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                  ),
+                ],
               ),
-            )
-          else if (userLatitude != null && userLongitude != null)
+              child: Row(
+                children: [
+                  Icon(Icons.location_on, color: Colors.red, size: 24),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Your Location',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          userAddress!,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          SizedBox(height: Responsive.spacing(context, 16)),
+
+          // Radar Map Panel
+          if (userLatitude != null && userLongitude != null)
             Column(
               children: [
                 RadarMapPanel(

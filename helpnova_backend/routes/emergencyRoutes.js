@@ -34,7 +34,7 @@ const authenticateToken = (req, res, next) => {
 // Send emergency alert to nearby users
 router.post("/send-alert", authenticateToken, async (req, res) => {
   try {
-    const { latitude, longitude, description } = req.body;
+    const { latitude, longitude, address, description } = req.body;
 
     if (!latitude || !longitude) {
       return res.status(400).json({
@@ -61,7 +61,7 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
       location: {
         latitude: latitude,
         longitude: longitude,
-        address: null // Can be populated later with geocoding
+        address: address || null
       },
       description: description || "Emergency SOS request",
       status: "active"

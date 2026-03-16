@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'main_navigation.dart';
 import 'services/api_service.dart';
+import 'widgets/map_search_widget.dart';
 import 'utils/responsive.dart';
 
 
@@ -34,6 +35,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
   String? _selectedBloodGroup;
   String? _selectedSkill;
   bool _locationAllowed = false;
+  double? _signupLatitude;
+  double? _signupLongitude;
+  String? _signupAddress;
   bool _isLoading = false;
   
   // Blood groups list
@@ -197,9 +201,8 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       ),
     );
   }
-//login card//
+  //login card//
   Widget loginCard() {
-    final padding = Responsive.padding(context);
     return Container(
       margin: EdgeInsets.symmetric(
         horizontal: Responsive.value(
@@ -725,36 +728,109 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
 
         const SizedBox(height: 15),
 
-        // Allow Location Button
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: OutlinedButton.icon(
-            onPressed: () async {
-              // Request location permission
-              setState(() {
-                _locationAllowed = !_locationAllowed;
-              });
-              // TODO: Implement actual location permission request
-            },
-            icon: Icon(
-              _locationAllowed ? Icons.location_on : Icons.location_off,
+        // Location Section
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
               color: _locationAllowed ? Colors.green : Colors.grey,
+              width: 2,
             ),
-            label: Text(
-              _locationAllowed ? "Location Allowed" : "Allow Location",
-              style: TextStyle(
-                color: _locationAllowed ? Colors.green : Colors.grey,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.location_on,
+                    color: _locationAllowed ? Colors.green : Colors.grey,
+                  ),
+                  SizedBox(width: 8),
+                  Text(
+                    'Location',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  Spacer(),
+                  Switch(
+                    value: _locationAllowed,
+                    onChanged: (value) {
+                      if (value) {
+                        _openMapSearch();
+                      } else {
+                        setState(() {
+                          _locationAllowed = false;
+                          _signupLatitude = null;
+                          _signupLongitude = null;
+                          _signupAddress = null;
+                        });
+                      }
+                    },
+                    activeColor: Colors.green,
+                  ),
+                ],
               ),
-            ),
-            style: OutlinedButton.styleFrom(
-              side: BorderSide(
-                color: _locationAllowed ? Colors.green : Colors.grey,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
+              SizedBox(height: 8),
+              if (_locationAllowed && _signupAddress != null)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Address:',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      _signupAddress!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                )
+              else if (_locationAllowed)
+                Text(
+                  'Please select a location on map',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.orange,
+                  ),
+                )
+              else
+                Text(
+                  'Enable location to help others in emergencies',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              if (_locationAllowed)
+                SizedBox(height: 8),
+              if (_locationAllowed)
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: _openMapSearch,
+                    icon: Icon(Icons.map, size: 18),
+                    label: Text('Set Location on Map'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
 
@@ -788,6 +864,27 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     );
   }
   
+  void _openMapSearch() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MapSearchWidget(
+          initialLatitude: _signupLatitude,
+          initialLongitude: _signupLongitude,
+          initialAddress: _signupAddress,
+          onLocationSelected: (latitude, longitude, address) {
+            setState(() {
+              _signupLatitude = latitude;
+              _signupLongitude = longitude;
+              _signupAddress = address;
+              _locationAllowed = true;
+            });
+          },
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleSignup() async {
     // Validation
     if (_signupNameController.text.isEmpty ||
@@ -829,6 +926,13 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       return;
     }
 
+    if (_locationAllowed && (_signupLatitude == null || _signupLongitude == null)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Please set your location on the map")),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
@@ -841,6 +945,8 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       bloodGroup: _selectedBloodGroup!,
       skill: _selectedSkill!,
       locationAllowed: _locationAllowed,
+      latitude: _signupLatitude,
+      longitude: _signupLongitude,
     );
 
     setState(() {
@@ -866,6 +972,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
         _selectedBloodGroup = null;
         _selectedSkill = null;
         _locationAllowed = false;
+        _signupLatitude = null;
+        _signupLongitude = null;
+        _signupAddress = null;
       });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
