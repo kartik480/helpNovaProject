@@ -43,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<dynamic> emergencyAlerts = []; // Active emergency alerts/alerts
   Timer? _activeUsersRefreshTimer;
   Timer? _emergencyAlertsTimer;
+  Timer? _nearbyRequestsRefreshTimer; // Timer for periodic refresh of nearby requests
   Set<Polyline> _polylines = {}; // Route polylines for navigation
 
   @override
@@ -61,6 +62,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _locationUpdateTimer?.cancel();
     _activeUsersRefreshTimer?.cancel();
     _emergencyAlertsTimer?.cancel();
+    _nearbyRequestsRefreshTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
@@ -213,6 +215,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (userLatitude != null && userLongitude != null) {
         _loadNearbyRequests();
         _loadEmergencyAlerts();
+        _loadActiveUsers();
       }
     }
   }
@@ -284,6 +287,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _loadActiveUsers();
       _loadEmergencyAlerts();
       _startEmergencyAlertsRefresh();
+      _startNearbyRequestsRefresh(); // Start periodic refresh of nearby requests
     } catch (e) {
       print('Error getting location: $e');
     }
@@ -365,31 +369,50 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Future<void> _loadNearbyRequests() async {
     if (userLatitude == null || userLongitude == null) {
       print('[HomeScreen] Cannot load nearby requests: location not available');
+      if (mounted) {
+        setState(() {
+          isLoadingRequests = false;
+        });
+      }
       return;
     }
 
     print('[HomeScreen] Loading nearby requests at (${userLatitude}, ${userLongitude})');
     
-    setState(() {
-      isLoadingRequests = true;
-    });
+    if (mounted) {
+      setState(() {
+        isLoadingRequests = true;
+      });
+    }
 
-    final result = await ApiService.getNearbyRequests(
-      latitude: userLatitude!,
-      longitude: userLongitude!,
-      radius: 10.0, // 10km radius (increased from 5km)
-    );
+    try {
+      final result = await ApiService.getNearbyRequests(
+        latitude: userLatitude!,
+        longitude: userLongitude!,
+        radius: 10.0, // 10km radius (increased from 5km)
+      );
 
-    setState(() {
-      isLoadingRequests = false;
-      if (result['success'] == true) {
-        nearbyRequests = result['requests'] ?? [];
-        print('[HomeScreen] Loaded ${nearbyRequests.length} nearby requests');
-      } else {
-        print('[HomeScreen] Failed to load nearby requests: ${result['message']}');
-        nearbyRequests = [];
+      if (mounted) {
+        setState(() {
+          isLoadingRequests = false;
+          if (result['success'] == true) {
+            nearbyRequests = result['requests'] ?? [];
+            print('[HomeScreen] Loaded ${nearbyRequests.length} nearby requests');
+          } else {
+            print('[HomeScreen] Failed to load nearby requests: ${result['message']}');
+            nearbyRequests = [];
+          }
+        });
       }
-    });
+    } catch (e) {
+      print('[HomeScreen] Error loading nearby requests: $e');
+      if (mounted) {
+        setState(() {
+          isLoadingRequests = false;
+          nearbyRequests = [];
+        });
+      }
+    }
   }
 
   // Load active users with location enabled (for displaying on map)
@@ -647,6 +670,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _emergencyAlertsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       if (mounted && isLocationEnabled) {
         await _loadEmergencyAlerts();
+      }
+    });
+  }
+
+  // Start periodic refresh of nearby requests (every 30 seconds)
+  void _startNearbyRequestsRefresh() {
+    _nearbyRequestsRefreshTimer?.cancel();
+    _nearbyRequestsRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (mounted && isLocationEnabled && userLatitude != null && userLongitude != null) {
+        await _loadNearbyRequests();
       }
     });
   }
