@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class GeocodingService {
-  // Google Maps API Key (same as used in AndroidManifest)
+  // Google Maps API Key (used for Geocoding, Places, Distance Matrix APIs)
   static const String _apiKey = 'AIzaSyBSt7L3j1Gtxi_nNhXz8pTcxCXv6niBieg';
   static const String _geocodingBaseUrl = 'https://maps.googleapis.com/maps/api/geocode/json';
   static const String _placesBaseUrl = 'https://maps.googleapis.com/maps/api/place/autocomplete/json';
