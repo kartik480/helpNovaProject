@@ -920,8 +920,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
   Widget _buildBottomWarningBar() {
-    // Check if there are any helpers visible on the map (accepted helpers or active users)
-    final hasVisibleHelpers = helperLocations.isNotEmpty || activeUsers.isNotEmpty || nearbyHelpersCount > 0;
+    // Check if there are any helpers visible on the map (accepted helpers, active users, or nearby filtered helpers)
+    final hasVisibleHelpers = helperLocations.isNotEmpty || 
+                               activeUsers.isNotEmpty || 
+                               nearbyActiveUsers.isNotEmpty ||
+                               nearbyHelpersCount > 0;
     
     if (hasVisibleHelpers) {
       // Don't show warning if there are helpers visible
