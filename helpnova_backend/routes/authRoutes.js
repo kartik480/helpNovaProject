@@ -401,4 +401,87 @@ router.get("/active-users", async (req, res) => {
   }
 });
 
+// Update user profile (protected route)
+router.put("/update-profile", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ 
+        message: "No token provided",
+        success: false 
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    const { name, phone, bloodGroup, skill, latitude, longitude, locationAllowed } = req.body;
+
+    // Build update object
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (bloodGroup !== undefined) updateData.bloodGroup = bloodGroup;
+    if (skill !== undefined) updateData.skill = skill;
+    if (locationAllowed !== undefined) updateData.locationAllowed = locationAllowed;
+
+    // Update location if provided
+    if (latitude !== undefined && longitude !== undefined) {
+      // Validate coordinates
+      if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+        return res.status(400).json({ 
+          message: "Invalid coordinates",
+          success: false 
+        });
+      }
+      
+      updateData.location = {
+        latitude: latitude,
+        longitude: longitude,
+        lastUpdated: new Date()
+      };
+      
+      // If location is being updated, automatically set locationAllowed to true
+      if (locationAllowed === undefined) {
+        updateData.locationAllowed = true;
+      }
+    }
+
+    const user = await User.findByIdAndUpdate(
+      decoded.userId,
+      updateData,
+      { new: true, runValidators: true }
+    ).select("-password");
+
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found",
+        success: false 
+      });
+    }
+
+    res.json({ 
+      success: true,
+      message: "Profile updated successfully",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        bloodGroup: user.bloodGroup,
+        skill: user.skill,
+        locationAllowed: user.locationAllowed,
+        location: user.location
+      }
+    });
+
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({ 
+      message: "Server error. Please try again later.",
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router;

@@ -585,6 +585,101 @@ router.get("/my-active-request/helpers-locations", authenticateToken, async (req
   }
 });
 
+// Get alerts/notifications for current user
+router.get("/alerts", authenticateToken, async (req, res) => {
+  try {
+    // Get all emergency requests where current user was notified or accepted
+    const EmergencyRequest = require("../models/EmergencyRequest");
+    
+    // Find requests where user was notified
+    const notifiedRequests = await EmergencyRequest.find({
+      'notifiedUsers.userId': req.userId,
+      status: { $in: ['active', 'resolved'] }
+    })
+    .populate('userId', 'name phone')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+    // Find requests where user accepted to help
+    const acceptedRequests = await EmergencyRequest.find({
+      'acceptedHelpers.helperId': req.userId,
+      status: { $in: ['active', 'resolved'] }
+    })
+    .populate('userId', 'name phone')
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+    // Combine and format alerts
+    const alerts = [];
+    
+    // Add notified alerts
+    notifiedRequests.forEach(request => {
+      const wasNotified = request.notifiedUsers.some(
+        n => n.userId.toString() === req.userId.toString()
+      );
+      const wasAccepted = request.acceptedHelpers.some(
+        h => h.helperId.toString() === req.userId.toString()
+      );
+      
+      if (wasNotified && !wasAccepted) {
+        alerts.push({
+          id: request._id.toString(),
+          type: 'emergency_alert',
+          title: 'Emergency Request Nearby',
+          message: `${request.userName} needs immediate help! ${request.description}`,
+          timestamp: request.createdAt,
+          requestId: request._id.toString(),
+          userId: request.userId._id.toString(),
+          userName: request.userName,
+          userPhone: request.userPhone,
+          latitude: request.location.latitude,
+          longitude: request.location.longitude,
+          status: request.status,
+          isRead: false
+        });
+      }
+    });
+
+    // Add accepted alerts
+    acceptedRequests.forEach(request => {
+      const helper = request.acceptedHelpers.find(
+        h => h.helperId.toString() === req.userId.toString()
+      );
+      
+      if (helper) {
+        alerts.push({
+          id: `${request._id}_accepted`,
+          type: 'request_accepted',
+          title: 'Request Accepted',
+          message: `You accepted ${request.userName}'s emergency request`,
+          timestamp: helper.acceptedAt,
+          requestId: request._id.toString(),
+          userId: request.userId._id.toString(),
+          userName: request.userName,
+          status: request.status,
+          isRead: false
+        });
+      }
+    });
+
+    // Sort by timestamp (newest first)
+    alerts.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.status(200).json({
+      success: true,
+      alerts: alerts,
+      count: alerts.length
+    });
+  } catch (error) {
+    console.error("Get alerts error:", error);
+    res.status(500).json({
+      message: "Server error. Please try again later.",
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Test endpoint to check Firebase Service Account configuration
 router.get("/test-fcm-config", authenticateToken, async (req, res) => {
   try {

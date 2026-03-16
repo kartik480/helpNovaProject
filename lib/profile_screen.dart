@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'login_signup.dart';
 import 'services/api_service.dart';
+import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatelessWidget{
-  const ProfileScreen ({super.key});
+class ProfileScreen extends StatefulWidget{
+  const ProfileScreen({super.key});
+  
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,10 +73,19 @@ class ProfileScreen extends StatelessWidget{
               context,
               icon: Icons.person_outline,
               title: 'Edit Profile',
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Edit profile coming soon')),
+              onTap: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditProfileScreen(),
+                  ),
                 );
+                // Refresh profile if it was updated
+                if (result == true) {
+                  setState(() {
+                    // Trigger rebuild to refresh user name
+                  });
+                }
               },
             ),
             _buildProfileOption(

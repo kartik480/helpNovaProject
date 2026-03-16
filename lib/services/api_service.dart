@@ -1443,6 +1443,156 @@ class ApiService {
     }
   }
 
+  // Get alerts/notifications for current user
+  static Future<Map<String, dynamic>> getAlerts() async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+          'alerts': [],
+        };
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/emergency/alerts'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+          'alerts': [],
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'alerts': data['alerts'] ?? [],
+          'count': data['count'] ?? 0,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch alerts',
+          'alerts': [],
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+        'alerts': [],
+      };
+    }
+  }
+
+  // Update user profile
+  static Future<Map<String, dynamic>> updateProfile({
+    String? name,
+    String? phone,
+    String? bloodGroup,
+    String? skill,
+    double? latitude,
+    double? longitude,
+    bool? locationAllowed,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final body = <String, dynamic>{};
+      if (name != null) body['name'] = name;
+      if (phone != null) body['phone'] = phone;
+      if (bloodGroup != null) body['bloodGroup'] = bloodGroup;
+      if (skill != null) body['skill'] = skill;
+      if (latitude != null) body['latitude'] = latitude;
+      if (longitude != null) body['longitude'] = longitude;
+      if (locationAllowed != null) body['locationAllowed'] = locationAllowed;
+
+      final response = await http.put(
+        Uri.parse('$baseUrl/auth/update-profile'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode(body),
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        // Update stored user name if name was changed
+        if (name != null && data['user'] != null && data['user']['name'] != null) {
+          await saveUserName(data['user']['name']);
+        }
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Profile updated successfully',
+          'user': data['user'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to update profile',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
   // Get all active users with location enabled (for displaying on map)
   static Future<Map<String, dynamic>> getActiveUsers() async {
     try {

@@ -237,7 +237,18 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             }
             backgroundColor = Colors.orange;
           } else {
-            message = '⚠️ No nearby helpers found. Make sure helpers have location enabled and are within 10km.';
+            // More detailed message based on debug info
+            final debug = result['debug'];
+            final totalActive = debug?['totalActiveUsers'] ?? 0;
+            final nearbyCount = debug?['nearbyUsersWithinDistance'] ?? 0;
+            
+            if (totalActive > 0 && nearbyCount == 0) {
+              message = '⚠️ Found $totalActive active helper${totalActive > 1 ? 's' : ''}, but none within 10km. Try increasing the search radius or wait for helpers to come closer.';
+            } else if (nearbyCount > 0) {
+              message = '⚠️ Found $nearbyCount nearby helper${nearbyCount > 1 ? 's' : ''}, but they don\'t have notifications enabled. Ask them to enable notifications in the app.';
+            } else {
+              message = '⚠️ No nearby helpers found. Make sure helpers have location enabled and are within 10km.';
+            }
             backgroundColor = Colors.orange;
           }
           
