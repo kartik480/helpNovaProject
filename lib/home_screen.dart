@@ -98,12 +98,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       if (isEmergency) {
         debugPrint('[HomeScreen] ✅ Emergency detected! Showing dialog...');
-        // Always try to show dialog, even if widget not mounted (will use NotificationService fallback)
+        // Always use NotificationService to show dialog - it has better context handling
+        // This ensures the dialog shows regardless of which screen the user is on
+        NotificationService.showEmergencyDialog(message);
+        
+        // Also try to show from HomeScreen context as backup if mounted
         if (mounted) {
-          _showEmergencyDialog(message);
-        } else {
-          debugPrint('[HomeScreen] ⚠️ Widget not mounted, using NotificationService...');
-          NotificationService.showEmergencyDialog(message);
+          Future.delayed(const Duration(milliseconds: 100), () {
+            if (mounted) {
+              _showEmergencyDialog(message);
+            }
+          });
         }
       } else {
         debugPrint('[HomeScreen] ❌ Not an emergency notification');

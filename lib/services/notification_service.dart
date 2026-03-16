@@ -147,11 +147,14 @@ class NotificationService {
       debugPrint('Longitude: ${data['longitude']}');
       debugPrint('Description: ${data['description']}');
       debugPrint('User ID: ${data['userId']}');
+      debugPrint('Request ID: ${data['requestId']}');
       
       // Get the root navigator context
-      final context = navigatorKey?.currentContext;
+      var context = navigatorKey?.currentContext;
+      
+      // If context is not immediately available, try multiple times with delays
       if (context == null) {
-        debugPrint('WARNING: No navigator context available, storing message for later');
+        debugPrint('WARNING: No navigator context available immediately, will retry...');
         debugPrint('Navigator key is null: ${navigatorKey == null}');
         debugPrint('Current context is null: ${navigatorKey?.currentContext == null}');
         
@@ -161,7 +164,13 @@ class NotificationService {
         // Start checking for context availability
         _startContextCheck();
         
-        // Also try to show after delays
+        // Try to show after multiple delays to catch context when it becomes available
+        Future.delayed(const Duration(milliseconds: 100), () {
+          _tryShowPendingDialogs();
+        });
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _tryShowPendingDialogs();
+        });
         Future.delayed(const Duration(milliseconds: 500), () {
           _tryShowPendingDialogs();
         });
@@ -171,13 +180,22 @@ class NotificationService {
         Future.delayed(const Duration(milliseconds: 2000), () {
           _tryShowPendingDialogs();
         });
+        Future.delayed(const Duration(milliseconds: 3000), () {
+          _tryShowPendingDialogs();
+        });
         return;
       }
 
+      // Context is available, show dialog immediately
       _showDialogWithContext(context, data);
     } catch (e) {
       debugPrint('ERROR showing emergency dialog: $e');
       debugPrint('Stack trace: ${StackTrace.current}');
+      
+      // Even on error, try to show after a delay
+      Future.delayed(const Duration(milliseconds: 1000), () {
+        _tryShowPendingDialogs();
+      });
     }
   }
 
@@ -198,15 +216,18 @@ class NotificationService {
   static void _tryShowPendingDialogs() {
     final context = navigatorKey?.currentContext;
     if (context != null && _pendingMessages.isNotEmpty) {
-      debugPrint('Context available, showing ${_pendingMessages.length} pending dialog(s)');
+      debugPrint('[NotificationService] ✅ Context available, showing ${_pendingMessages.length} pending dialog(s)');
       final messages = List<RemoteMessage>.from(_pendingMessages);
       _pendingMessages.clear();
       _contextCheckTimer?.cancel();
       _contextCheckTimer = null;
       
       for (final message in messages) {
+        debugPrint('[NotificationService] Showing pending dialog for request: ${message.data['requestId']}');
         _showDialogWithContext(context, message.data);
       }
+    } else if (_pendingMessages.isNotEmpty) {
+      debugPrint('[NotificationService] ⏳ Still waiting for context... ${_pendingMessages.length} message(s) pending');
     }
   }
 
@@ -221,29 +242,85 @@ class NotificationService {
       debugPrint('  - Description: ${data['description']}');
       debugPrint('  - Request ID: ${data['requestId']}');
       
+      // Check if context is mounted before proceeding
+      if (!context.mounted) {
+        debugPrint('[NotificationService] ⚠️ Context not mounted, will retry...');
+        // Store message for retry
+        _pendingMessages.add(RemoteMessage(
+          data: data,
+          notification: RemoteNotification(
+            title: data['userName']?.toString() ?? 'Emergency',
+            body: data['description']?.toString() ?? 'Emergency SOS request',
+          ),
+        ));
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _tryShowPendingDialogs();
+        });
+        return;
+      }
+      
       // Use SchedulerBinding to ensure the dialog shows after the frame is built
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!context.mounted) {
-          debugPrint('[NotificationService] ⚠️ Context not mounted after postFrameCallback');
+        final currentContext = navigatorKey?.currentContext;
+        if (currentContext == null || !currentContext.mounted) {
+          debugPrint('[NotificationService] ⚠️ Context not available after postFrameCallback, will retry...');
+          // Store message for retry
+          _pendingMessages.add(RemoteMessage(
+            data: data,
+            notification: RemoteNotification(
+              title: data['userName']?.toString() ?? 'Emergency',
+              body: data['description']?.toString() ?? 'Emergency SOS request',
+            ),
+          ));
+          Future.delayed(const Duration(milliseconds: 500), () {
+            _tryShowPendingDialogs();
+          });
           return;
         }
         
         try {
+          // Check if dialog is already showing by trying to find it
+          // If not, show the new dialog
           showDialog(
-            context: context,
+            context: currentContext,
             barrierDismissible: false,
             builder: (dialogContext) => EmergencyNotificationDialog(
-              userName: data['userName'] ?? 'User',
-              userPhone: data['userPhone'] ?? '',
+              userName: data['userName']?.toString() ?? 'User',
+              userPhone: data['userPhone']?.toString() ?? '',
               latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
               longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
-              description: data['description'] ?? 'Emergency SOS request',
-              requestId: data['requestId'] ?? data['userId'] ?? '',
+              description: data['description']?.toString() ?? 'Emergency SOS request',
+              requestId: data['requestId']?.toString() ?? data['userId']?.toString() ?? '',
             ),
           );
           debugPrint('[NotificationService] ✅ Dialog shown successfully!');
         } catch (showError) {
           debugPrint('[NotificationService] ❌ Error in showDialog: $showError');
+          debugPrint('[NotificationService] Stack: ${StackTrace.current}');
+          
+          // Retry after delay
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            final retryContext = navigatorKey?.currentContext;
+            if (retryContext != null && retryContext.mounted) {
+              try {
+                showDialog(
+                  context: retryContext,
+                  barrierDismissible: false,
+                  builder: (dialogContext) => EmergencyNotificationDialog(
+                    userName: data['userName']?.toString() ?? 'User',
+                    userPhone: data['userPhone']?.toString() ?? '',
+                    latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
+                    longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
+                    description: data['description']?.toString() ?? 'Emergency SOS request',
+                    requestId: data['requestId']?.toString() ?? data['userId']?.toString() ?? '',
+                  ),
+                );
+                debugPrint('[NotificationService] ✅ Dialog shown successfully on retry!');
+              } catch (retryError) {
+                debugPrint('[NotificationService] ❌ ERROR on retry: $retryError');
+              }
+            }
+          });
         }
       });
     } catch (e) {
@@ -251,7 +328,7 @@ class NotificationService {
       debugPrint('[NotificationService] Stack trace: ${StackTrace.current}');
       
       // Retry after a delay
-      Future.delayed(const Duration(milliseconds: 500), () {
+      Future.delayed(const Duration(milliseconds: 1000), () {
         final retryContext = navigatorKey?.currentContext;
         if (retryContext != null && retryContext.mounted) {
           try {
@@ -259,20 +336,20 @@ class NotificationService {
               context: retryContext,
               barrierDismissible: false,
               builder: (dialogContext) => EmergencyNotificationDialog(
-                userName: data['userName'] ?? 'User',
-                userPhone: data['userPhone'] ?? '',
+                userName: data['userName']?.toString() ?? 'User',
+                userPhone: data['userPhone']?.toString() ?? '',
                 latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
                 longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
-                description: data['description'] ?? 'Emergency SOS request',
-                requestId: data['requestId'] ?? data['userId'] ?? '',
+                description: data['description']?.toString() ?? 'Emergency SOS request',
+                requestId: data['requestId']?.toString() ?? data['userId']?.toString() ?? '',
               ),
             );
-            debugPrint('[NotificationService] ✅ Dialog shown successfully on retry!');
+            debugPrint('[NotificationService] ✅ Dialog shown successfully on error retry!');
           } catch (retryError) {
-            debugPrint('[NotificationService] ❌ ERROR on retry: $retryError');
+            debugPrint('[NotificationService] ❌ ERROR on error retry: $retryError');
           }
         } else {
-          debugPrint('[NotificationService] ⚠️ Retry context not available');
+          debugPrint('[NotificationService] ⚠️ Retry context not available after error');
         }
       });
     }
