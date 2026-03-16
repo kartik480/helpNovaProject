@@ -70,13 +70,17 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     const savedRequest = await emergencyRequest.save();
     console.log(`✅ SOS Request saved to database: ${savedRequest._id}`);
 
-    // Step 2: Find nearby users (within 5km radius) who have FCM tokens
+    // Step 2: Find nearby users (within 5km radius) who have FCM tokens and are active
+    // Only include users with location updated within the last 5 minutes (active users)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+    
     const nearbyUsers = await User.find({
       _id: { $ne: req.userId }, // Exclude the sender
       fcmToken: { $ne: null, $exists: true }, // Only users with FCM tokens
       locationAllowed: true, // Only users who allow location sharing
       'location.latitude': { $ne: null, $exists: true }, // Only users with location data
       'location.longitude': { $ne: null, $exists: true },
+      'location.lastUpdated': { $gte: fiveMinutesAgo }, // Only users with recent location updates (active)
     });
 
     // Filter users by distance (within 5km)

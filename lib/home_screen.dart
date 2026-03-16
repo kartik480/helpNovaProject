@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'dart:async';
 import 'profile_screen.dart';
 import 'services/api_service.dart';
@@ -32,6 +33,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   double? userLatitude;
   double? userLongitude;
   StreamSubscription<RemoteMessage>? _notificationSubscription;
+  GoogleMapController? _mapController;
+  bool isLocationEnabled = false;
+  Timer? _locationUpdateTimer;
 
   @override
   void initState() {
@@ -46,6 +50,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _notificationSubscription?.cancel();
+    _locationUpdateTimer?.cancel();
+    _mapController?.dispose();
     super.dispose();
   }
 
@@ -197,11 +203,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) {
+          setState(() {
+            isLocationEnabled = false;
+          });
           return;
         }
       }
 
       if (permission == LocationPermission.deniedForever) {
+        setState(() {
+          isLocationEnabled = false;
+        });
         return;
       }
 
@@ -212,10 +224,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       setState(() {
         userLatitude = position.latitude;
         userLongitude = position.longitude;
+        isLocationEnabled = true; // Location is enabled and available
       });
 
       // Update user location in backend for emergency notifications
       _updateUserLocationInBackend(position.latitude, position.longitude);
+
+      // Start periodic location updates (every 2 minutes) to keep green marker active
+      _startPeriodicLocationUpdates();
 
       _loadNearbyRequests();
     } catch (e) {
@@ -235,6 +251,37 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Silently fail - location update is not critical for app functionality
       print('[HomeScreen] Failed to update location in backend: $e');
     }
+  }
+
+  // Start periodic location updates to keep green marker active
+  void _startPeriodicLocationUpdates() {
+    _locationUpdateTimer?.cancel();
+    _locationUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
+      if (mounted && isLocationEnabled) {
+        try {
+          Position position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+          );
+          setState(() {
+            userLatitude = position.latitude;
+            userLongitude = position.longitude;
+          });
+          _updateUserLocationInBackend(position.latitude, position.longitude);
+          
+          // Update map camera if controller is available
+          if (_mapController != null) {
+            _mapController!.animateCamera(
+              CameraUpdate.newLatLngZoom(
+                LatLng(position.latitude, position.longitude),
+                15,
+              ),
+            );
+          }
+        } catch (e) {
+          print('[HomeScreen] Error updating location periodically: $e');
+        }
+      }
+    });
   }
 
   Future<void> _loadNearbyRequests() async {
@@ -378,6 +425,132 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ],
                           ),
                         ),
+
+                        SizedBox(height: Responsive.spacing(context, 20)),
+
+                        // Location Status Map - Shows green marker when location is enabled
+                        if (userLatitude != null && userLongitude != null && isLocationEnabled)
+                          Container(
+                            height: 200,
+                            margin: EdgeInsets.only(bottom: Responsive.spacing(context, 20)),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 10,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(16),
+                              child: Stack(
+                                children: [
+                                  GoogleMap(
+                                    onMapCreated: (GoogleMapController controller) {
+                                      _mapController = controller;
+                                      controller.animateCamera(
+                                        CameraUpdate.newLatLngZoom(
+                                          LatLng(userLatitude!, userLongitude!),
+                                          15,
+                                        ),
+                                      );
+                                    },
+                                    initialCameraPosition: CameraPosition(
+                                      target: LatLng(userLatitude!, userLongitude!),
+                                      zoom: 15,
+                                    ),
+                                    markers: {
+                                      Marker(
+                                        markerId: MarkerId('my_location'),
+                                        position: LatLng(userLatitude!, userLongitude!),
+                                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+                                        infoWindow: InfoWindow(
+                                          title: 'Your Location',
+                                          snippet: 'You are active and can receive alerts',
+                                        ),
+                                      ),
+                                    },
+                                    myLocationEnabled: false, // We're using custom marker
+                                    myLocationButtonEnabled: false,
+                                    mapType: MapType.normal,
+                                    zoomControlsEnabled: true,
+                                    compassEnabled: true,
+                                  ),
+                                  // Status indicator overlay
+                                  Positioned(
+                                    top: 10,
+                                    left: 10,
+                                    child: Container(
+                                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        borderRadius: BorderRadius.circular(20),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.green.withOpacity(0.3),
+                                            blurRadius: 8,
+                                            spreadRadius: 2,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.location_on, color: Colors.white, size: 18),
+                                          SizedBox(width: 6),
+                                          Text(
+                                            'Active',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else if (!isLocationEnabled)
+                          Container(
+                            height: 200,
+                            margin: EdgeInsets.only(bottom: Responsive.spacing(context, 20)),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[200],
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.location_off, size: 48, color: Colors.grey),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Enable Location to Help Others',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.grey[700],
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Turn on GPS to receive emergency alerts',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[600],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
 
                         SizedBox(height: Responsive.spacing(context, 20)),
 

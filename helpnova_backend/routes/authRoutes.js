@@ -302,6 +302,7 @@ router.post("/update-location", async (req, res) => {
     const user = await User.findByIdAndUpdate(
       decoded.userId,
       { 
+        locationAllowed: true, // Set to true when user updates location (they're allowing location sharing)
         location: {
           latitude: latitude,
           longitude: longitude,
