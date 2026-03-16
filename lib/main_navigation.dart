@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
-import 'map_screen.dart';
 import 'request_screen.dart';
 import 'alerts_screen.dart';
-import 'profile_screen.dart';
 import 'utils/responsive.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -18,10 +16,8 @@ class _MainNavigationState extends State<MainNavigation> {
 
   final List<Widget> _screens = [
     HomeScreen(),
-    MapScreen(),
     RequestScreen(),
     AlertsScreen(),
-    ProfileScreen(),
   ];
 
   @override
@@ -36,7 +32,6 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   Widget _buildInnovativeBottomNav() {
-    final safeAreaBottom = MediaQuery.of(context).padding.bottom;
     final contentHeight = Responsive.bottomNavContentHeight(context);
     
     return Container(
@@ -63,10 +58,8 @@ class _MainNavigationState extends State<MainNavigation> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(Icons.home_rounded, 'Home', 0),
-              _buildNavItem(Icons.map_rounded, 'Map', 1),
-              _buildNavItem(Icons.add_circle_rounded, 'Request', 2, isCenter: true),
-              _buildNavItem(Icons.notifications_rounded, 'Alerts', 3),
-              _buildNavItem(Icons.person_rounded, 'Profile', 4),
+              _buildNavItem(Icons.add_circle_rounded, 'Create', 1, isCenter: true),
+              _buildNavItem(Icons.notifications_rounded, 'Alert', 2),
             ],
           ),
         ),
@@ -157,7 +150,7 @@ class _MainNavigationState extends State<MainNavigation> {
                     size: iconSize,
                   ),
                 ),
-                if (index == 3) // Alerts badge
+                if (index == 2) // Alerts badge
                   Positioned(
                     right: -4,
                     top: -4,

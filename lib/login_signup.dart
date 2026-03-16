@@ -3,7 +3,7 @@ import 'main_navigation.dart';
 import 'services/api_service.dart';
 import 'widgets/map_search_widget.dart';
 import 'utils/responsive.dart';
-
+import 'dart:async';
 
 class LoginSignupScreen extends StatefulWidget {
   const LoginSignupScreen({super.key});
@@ -14,11 +14,15 @@ class LoginSignupScreen extends StatefulWidget {
 
 class _LoginSignupScreenState extends State<LoginSignupScreen>
     with SingleTickerProviderStateMixin {
-
   late TabController _tabController;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  
   int _currentTabIndex = 0;
-  double _loginFormHeight = 280; // Will be calculated
-  double _signupFormHeight = 650; // Will be calculated
+  bool _rememberMe = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   
   // Login form controllers
   final TextEditingController _loginEmailController = TextEditingController();
@@ -60,13 +64,21 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _animationController = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 800),
+    );
     
-    // Calculate form heights based on content
-    // Login form: 2 text fields (56px each) + spacing (12px) + remember me row (40px) + spacing (12px) + button (50px) = ~230px + padding
-    _loginFormHeight = 280;
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
+    );
     
-    // Signup form: 5 text fields (56px each) + 2 dropdowns (56px each) + spacing (12px between each) + location button (50px) + create button (50px) = ~600px + padding
-    _signupFormHeight = 650;
+    _slideAnimation = Tween<Offset>(
+      begin: Offset(0, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
+    
+    _animationController.forward();
     
     _tabController.addListener(() {
       if (_currentTabIndex != _tabController.index) {
@@ -75,52 +87,6 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
         });
       }
     });
-    
-    // Measure after first frame
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _calculateHeights();
-    });
-  }
-
-  void _calculateHeights() {
-    // Login form calculation (with isDense: true, fields are ~52px):
-    // Email field: ~52px
-    // Spacing: 12px
-    // Password field: ~52px
-    // Spacing: 8px
-    // Remember me row: ~40px
-    // Spacing: 12px
-    // Sign In button: ~50px
-    // Total: 52 + 12 + 52 + 8 + 40 + 12 + 50 = 226px, add 20px padding = 246px
-    final loginHeight = 52 + 12 + 52 + 8 + 40 + 12 + 50 + 20;
-    
-    // Signup form calculation:
-    // Full Name field: ~52px
-    // Spacing: 12px
-    // Phone Number field: ~52px
-    // Spacing: 12px
-    // Email field: ~52px
-    // Spacing: 12px
-    // Password field: ~52px
-    // Spacing: 12px
-    // Confirm Password field: ~52px
-    // Spacing: 12px
-    // Blood Group dropdown: ~52px
-    // Spacing: 12px
-    // Skills dropdown: ~52px
-    // Spacing: 15px
-    // Location button: ~50px
-    // Spacing: 15px
-    // Create Account button: ~50px
-    // Total: (7 * 52) + (7 * 12) + 15 + 50 + 15 + 50 = 364 + 84 + 130 = 578px, add 40px = 618px
-    final signupHeight = (7 * 52) + (7 * 12) + 15 + 50 + 15 + 50 + 40;
-    
-    if (mounted) {
-      setState(() {
-        _loginFormHeight = loginHeight.toDouble();
-        _signupFormHeight = signupHeight.toDouble();
-      });
-    }
   }
   
   @override
@@ -133,76 +99,106 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     _signupPasswordController.dispose();
     _signupConfirmPasswordController.dispose();
     _tabController.dispose();
+    _animationController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-
     return Scaffold(
-      backgroundColor: Colors.grey[200],
-
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-
-            const SizedBox(height: 80),
-
-            // Logo
-            Column(
-              children: [
-
-                SizedBox(height: Responsive.spacing(context, 80)),
-
-                SizedBox(
-                  height: Responsive.value(
-                    context,
-                    mobile: 110.0,
-                    tablet: 130.0,
-                    desktop: 150.0,
-                  ),
-                  child: Image.asset(
-                    "images/logo.png",
-                    fit: BoxFit.contain,
-                  ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              Colors.red.shade50,
+              Colors.white,
+              Colors.red.shade50,
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    SizedBox(height: Responsive.spacing(context, 40)),
+                    
+                    // Logo and Title Section
+                    Column(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.red.withOpacity(0.2),
+                                blurRadius: 20,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            "images/logo.png",
+                            height: Responsive.value(
+                              context,
+                              mobile: 80.0,
+                              tablet: 100.0,
+                              desktop: 120.0,
+                            ),
+                            fit: BoxFit.contain,
+                          ),
+                        ),
+                        SizedBox(height: Responsive.spacing(context, 20)),
+                        Text(
+                          "Help Nova",
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 32),
+                            fontWeight: FontWeight.bold,
+                            color: Colors.red.shade700,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        SizedBox(height: Responsive.spacing(context, 8)),
+                        Text(
+                          "Emergency Response Made Simple",
+                          style: TextStyle(
+                            fontSize: Responsive.fontSize(context, 14),
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    
+                    SizedBox(height: Responsive.spacing(context, 40)),
+                    
+                    // Login/Signup Card
+                    _buildLoginCard(),
+                    
+                    SizedBox(height: Responsive.spacing(context, 30)),
+                    
+                    // Social Login
+                    _buildSocialLogin(),
+                    
+                    SizedBox(height: Responsive.spacing(context, 20)),
+                  ],
                 ),
-                SizedBox(height: Responsive.spacing(context, 15)),
-              ],
-            ),
-
-            SizedBox(height: Responsive.spacing(context, 1)),
-
-            Text(
-              "Help Nova",
-              style: TextStyle(
-                fontSize: Responsive.fontSize(context, 28),
-                fontWeight: FontWeight.bold,
               ),
             ),
-
-            Text(
-              "A hyperlocal emergency app",
-              style: TextStyle(
-                color: Colors.red,
-                fontSize: Responsive.fontSize(context, 14),
-              ),
-            ),
-
-            SizedBox(height: Responsive.spacing(context, 30)),
-
-            loginCard(),
-
-            SizedBox(height: Responsive.spacing(context, 20)),
-
-            socialLogin(),
-
-          ],
+          ),
         ),
       ),
     );
   }
-  //login card//
-  Widget loginCard() {
+
+  Widget _buildLoginCard() {
     return Container(
       margin: EdgeInsets.symmetric(
         horizontal: Responsive.value(
@@ -212,117 +208,575 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
           desktop: 60.0,
         ),
       ),
-      padding: EdgeInsets.all(Responsive.spacing(context, 20)),
-
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(30),
         boxShadow: [
-          //for shadow glow //
           BoxShadow(
-            color: Colors.red.withOpacity(0.25), // glow color
-            blurRadius: 25,  // softness of glow
-            spreadRadius: 2, // size of glow
-            offset: Offset(0, 8), // shadow direction
+            color: Colors.red.withOpacity(0.15),
+            blurRadius: 30,
+            spreadRadius: 0,
+            offset: Offset(0, 10),
           ),
         ],
       ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(30),
+        child: Column(
+          children: [
+            // Tab Bar with gradient background
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.red.shade600, Colors.red.shade800],
+                ),
+              ),
+              child: TabBar(
+                controller: _tabController,
+                indicator: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(25),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                labelColor: Colors.red.shade700,
+                unselectedLabelColor: Colors.white,
+                labelStyle: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+                tabs: [
+                  Tab(text: "Login"),
+                  Tab(text: "Sign Up"),
+                ],
+              ),
+            ),
+            
+            // Form Content
+            Container(
+              padding: EdgeInsets.all(Responsive.spacing(context, 24)),
+              child: AnimatedSwitcher(
+                duration: Duration(milliseconds: 300),
+                child: _currentTabIndex == 0
+                    ? _buildLoginForm()
+                    : _buildSignupForm(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-      child: Column(
-        children: [
-
-          TabBar(
-            controller: _tabController,
-            labelColor: Colors.red,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: Colors.red,
-            tabs: const [
-              Tab(text: "Login"),
-              Tab(text: "Sign Up"),
-
-            ],
-
+  Widget _buildLoginForm() {
+    return Column(
+      key: ValueKey('login'),
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildTextField(
+          controller: _loginEmailController,
+          icon: Icons.email_outlined,
+          label: "Email",
+          keyboardType: TextInputType.emailAddress,
+        ),
+        
+        SizedBox(height: 16),
+        
+        _buildTextField(
+          controller: _loginPasswordController,
+          icon: Icons.lock_outline,
+          label: "Password",
+          obscureText: _obscurePassword,
+          suffixIcon: IconButton(
+            icon: Icon(
+              _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+              color: Colors.grey[600],
+            ),
+            onPressed: () {
+              setState(() {
+                _obscurePassword = !_obscurePassword;
+              });
+            },
           ),
-
-
-
-          const SizedBox(height: 20),
-
-          AnimatedContainer(
-            duration: Duration(milliseconds: 200),
-            curve: Curves.easeInOut,
-            height: _currentTabIndex == 0 
-                ? _loginFormHeight  // Fitted height for login form
-                : _signupFormHeight, // Fitted height for signup form
-            child: TabBarView(
-              controller: _tabController,
+        ),
+        
+        SizedBox(height: 12),
+        
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
               children: [
-                // Login form - no scroll needed, fits perfectly
-                loginForm(),
-                // Signup form - scrollable if content exceeds screen
-                SingleChildScrollView(
-                  child: Padding(
-                    padding: EdgeInsets.only(bottom: 20),
-                    child: signUpForm(),
+                Checkbox(
+                  value: _rememberMe,
+                  onChanged: (value) {
+                    setState(() {
+                      _rememberMe = value ?? false;
+                    });
+                  },
+                  activeColor: Colors.red,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                Text(
+                  "Remember me",
+                  style: TextStyle(
+                    color: Colors.grey[700],
+                    fontSize: 14,
                   ),
                 ),
               ],
             ),
+            TextButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Password reset feature coming soon')),
+                );
+              },
+              child: Text(
+                "Forgot Password?",
+                style: TextStyle(
+                  color: Colors.red,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        
+        SizedBox(height: 24),
+        
+        _buildActionButton(
+          text: "Sign In",
+          onPressed: _isLoading ? null : _handleLogin,
+          isLoading: _isLoading,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSignupForm() {
+    return SingleChildScrollView(
+      key: ValueKey('signup'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _buildTextField(
+            controller: _signupNameController,
+            icon: Icons.person_outline,
+            label: "Full Name",
           ),
-
-
-
-
-
+          
+          SizedBox(height: 16),
+          
+          _buildTextField(
+            controller: _signupPhoneController,
+            icon: Icons.phone_outlined,
+            label: "Phone Number",
+            keyboardType: TextInputType.phone,
+          ),
+          
+          SizedBox(height: 16),
+          
+          _buildTextField(
+            controller: _signupEmailController,
+            icon: Icons.email_outlined,
+            label: "Email",
+            keyboardType: TextInputType.emailAddress,
+          ),
+          
+          SizedBox(height: 16),
+          
+          _buildTextField(
+            controller: _signupPasswordController,
+            icon: Icons.lock_outline,
+            label: "Password",
+            obscureText: _obscurePassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                color: Colors.grey[600],
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+            ),
+          ),
+          
+          SizedBox(height: 16),
+          
+          _buildTextField(
+            controller: _signupConfirmPasswordController,
+            icon: Icons.lock_outline,
+            label: "Confirm Password",
+            obscureText: _obscureConfirmPassword,
+            suffixIcon: IconButton(
+              icon: Icon(
+                _obscureConfirmPassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                color: Colors.grey[600],
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscureConfirmPassword = !_obscureConfirmPassword;
+                });
+              },
+            ),
+          ),
+          
+          SizedBox(height: 16),
+          
+          _buildDropdownField(
+            value: _selectedBloodGroup,
+            icon: Icons.bloodtype,
+            label: "Blood Group",
+            items: _bloodGroups,
+            onChanged: (value) {
+              setState(() {
+                _selectedBloodGroup = value;
+              });
+            },
+          ),
+          
+          SizedBox(height: 16),
+          
+          _buildDropdownField(
+            value: _selectedSkill,
+            icon: Icons.medical_services_outlined,
+            label: "Skills",
+            items: _skills,
+            onChanged: (value) {
+              setState(() {
+                _selectedSkill = value;
+              });
+            },
+          ),
+          
+          SizedBox(height: 16),
+          
+          _buildLocationSection(),
+          
+          SizedBox(height: 24),
+          
+          _buildActionButton(
+            text: "Create Account",
+            onPressed: _isLoading ? null : _handleSignup,
+            isLoading: _isLoading,
+          ),
         ],
       ),
     );
   }
 
-  //social login section //
-  Widget socialLogin() {
-    return Column(
-      children: [
-        Text(
-          "Or continue with",
-          style: TextStyle(
-            fontSize: Responsive.fontSize(context, 14),
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required IconData icon,
+    required String label,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    Widget? suffixIcon,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: TextField(
+        controller: controller,
+        keyboardType: keyboardType,
+        obscureText: obscureText,
+        style: TextStyle(fontSize: 15),
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: Colors.red.shade600),
+          suffixIcon: suffixIcon,
+          labelText: label,
+          labelStyle: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String? value,
+    required IconData icon,
+    required String label,
+    required List<String> items,
+    required Function(String?) onChanged,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: DropdownButtonFormField<String>(
+        value: value,
+        decoration: InputDecoration(
+          prefixIcon: Icon(icon, color: Colors.red.shade600),
+          labelText: label,
+          labelStyle: TextStyle(
+            color: Colors.grey[600],
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+        items: items.map((String item) {
+          return DropdownMenuItem<String>(
+            value: item,
+            child: Text(item),
+          );
+        }).toList(),
+        onChanged: onChanged,
+        dropdownColor: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildLocationSection() {
+    return Container(
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _locationAllowed ? Colors.green.shade50 : Colors.grey[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _locationAllowed ? Colors.green : Colors.grey[300]!,
+          width: 2,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.location_on,
+                color: _locationAllowed ? Colors.green : Colors.grey[600],
+              ),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Location Services',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+              ),
+              Switch(
+                value: _locationAllowed,
+                onChanged: (value) {
+                  if (value) {
+                    _openMapSearch();
+                  } else {
+                    setState(() {
+                      _locationAllowed = false;
+                      _signupLatitude = null;
+                      _signupLongitude = null;
+                      _signupAddress = null;
+                    });
+                  }
+                },
+                activeColor: Colors.green,
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          if (_locationAllowed && _signupAddress != null)
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _signupAddress!,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[800],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else if (_locationAllowed)
+            Container(
+              padding: EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Please set your location on map',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.orange.shade800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            Text(
+              'Enable to help others in emergencies nearby',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+              ),
+            ),
+          if (_locationAllowed)
+            SizedBox(height: 12),
+          if (_locationAllowed)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _openMapSearch,
+                icon: Icon(Icons.map, size: 18),
+                label: Text('Set Location on Map'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required String text,
+    required VoidCallback? onPressed,
+    required bool isLoading,
+  }) {
+    return Container(
+      width: double.infinity,
+      height: 56,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.red.shade600, Colors.red.shade800],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.red.withOpacity(0.3),
+            blurRadius: 15,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
           ),
         ),
-        SizedBox(height: Responsive.spacing(context, 15)),
+        child: isLoading
+            ? SizedBox(
+                height: 24,
+                width: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Text(
+                text,
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+      ),
+    );
+  }
+
+  Widget _buildSocialLogin() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.grey[300])),
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                "Or continue with",
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Colors.grey[300])),
+          ],
+        ),
+        
+        SizedBox(height: 20),
+        
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            CircleAvatar(
-              radius: Responsive.value(
-                context,
-                mobile: 25.0,
-                tablet: 30.0,
-                desktop: 35.0,
-              ),
-              backgroundColor: Colors.white,
-              child: Icon(
-                Icons.g_mobiledata,
-                size: Responsive.iconSize(context, 30),
-              ),
+            _buildSocialButton(
+              icon: Icons.g_mobiledata,
+              label: 'Google',
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Google sign-in coming soon')),
+                );
+              },
             ),
-            SizedBox(width: Responsive.spacing(context, 20)),
-            CircleAvatar(
-              radius: Responsive.value(
-                context,
-                mobile: 25.0,
-                tablet: 30.0,
-                desktop: 35.0,
-              ),
-              backgroundColor: Colors.white,
-              child: Icon(
-                Icons.apple,
-                size: Responsive.iconSize(context, 30),
-              ),
+            SizedBox(width: 16),
+            _buildSocialButton(
+              icon: Icons.apple,
+              label: 'Apple',
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Apple sign-in coming soon')),
+                );
+              },
             ),
           ],
         ),
-        SizedBox(height: Responsive.spacing(context, 20)),
+        
+        SizedBox(height: 24),
+        
         Padding(
           padding: EdgeInsets.symmetric(
             horizontal: Responsive.value(
@@ -333,537 +787,60 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             ),
           ),
           child: Text(
-            "By joining, you agree to Help Nova's Terms of Service and Privacy Policy.",
+            "By continuing, you agree to Help Nova's Terms of Service and Privacy Policy.",
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: Responsive.fontSize(context, 12),
+              fontSize: 12,
+              color: Colors.grey[600],
+              height: 1.5,
             ),
           ),
-        )
+        ),
       ],
     );
   }
 
-  //login form//
-  Widget loginForm() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-
-        TextField(
-          controller: _loginEmailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.email, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
+  Widget _buildSocialButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey[300]!),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: Offset(0, 2),
             ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "EMAIL",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            filled: true,
-            fillColor: Colors.white,
-            isDense: true,
-          ),
+          ],
         ),
-
-        const SizedBox(height: 12),
-
-        TextField(
-          controller: _loginPasswordController,
-          obscureText: true,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.lock, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "PASSWORD",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            filled: true,
-            fillColor: Colors.white,
-            isDense: true,
-          ),
-        ),
-
-        const SizedBox(height: 8),
-
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Row(
-              children: [
-                Checkbox(
-                  value: false, 
-                  onChanged: (v) {},
-                  activeColor: Colors.red,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                Text(
-                  "Remember me",
-                  style: TextStyle(color: Colors.grey[700], fontSize: 14),
-                ),
-              ],
-            ),
-            TextButton(
-              onPressed: () {},
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                minimumSize: Size.zero,
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: Text(
-                "Forgot?",
-                style: TextStyle(color: Colors.red, fontSize: 14),
+            Icon(icon, color: Colors.grey[800], size: 24),
+            SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey[800],
               ),
             ),
           ],
         ),
-
-        const SizedBox(height: 12),
-
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              elevation: 0,
-            ),
-            onPressed: _isLoading ? null : _handleLogin,
-            child: _isLoading 
-              ? SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text(
-                  "Sign In",
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                ),
-          ),
-        ),
-
-      ],
+      ),
     );
   }
-  
-  Future<void> _handleLogin() async {
-    if (_loginEmailController.text.isEmpty || _loginPasswordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please fill in all fields")),
-      );
-      return;
-    }
 
-    setState(() {
-      _isLoading = true;
-    });
-
-    final result = await ApiService.login(
-      email: _loginEmailController.text.trim(),
-      password: _loginPasswordController.text,
-    );
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (result['success'] == true) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => MainNavigation()),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'Login failed'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  //signup form//
-  Widget signUpForm() {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Full Name
-        TextField(
-          controller: _signupNameController,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.person, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Full Name",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Phone Number
-        TextField(
-          controller: _signupPhoneController,
-          keyboardType: TextInputType.phone,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.phone, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Phone Number",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Email
-        TextField(
-          controller: _signupEmailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.email, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Email",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Password
-        TextField(
-          controller: _signupPasswordController,
-          obscureText: true,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.lock, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Password",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Confirm Password
-        TextField(
-          controller: _signupConfirmPasswordController,
-          obscureText: true,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.lock_outline, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Confirm Password",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-
-        const SizedBox(height: 12),
-
-        // Blood Group Dropdown
-        DropdownButtonFormField<String>(
-          value: _selectedBloodGroup,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.bloodtype, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Blood Group",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          items: _bloodGroups.map((String bloodGroup) {
-            return DropdownMenuItem<String>(
-              value: bloodGroup,
-              child: Text(bloodGroup),
-            );
-          }).toList(),
-          onChanged: (String? newValue) {
-            setState(() {
-              _selectedBloodGroup = newValue;
-            });
-          },
-        ),
-
-        const SizedBox(height: 12),
-
-        // Skills Dropdown
-        DropdownButtonFormField<String>(
-          value: _selectedSkill,
-          decoration: InputDecoration(
-            prefixIcon: Icon(Icons.medical_services, color: Colors.grey[600]),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.grey[300]!),
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: Colors.red),
-            ),
-            labelText: "Skills",
-            labelStyle: TextStyle(color: Colors.grey[600], fontSize: 12),
-            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-          items: _skills.map((String skill) {
-            return DropdownMenuItem<String>(
-              value: skill,
-              child: Text(skill),
-            );
-          }).toList(),
-          onChanged: (String? newValue) {
-            setState(() {
-              _selectedSkill = newValue;
-            });
-          },
-        ),
-
-        const SizedBox(height: 15),
-
-        // Location Section
-        Container(
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _locationAllowed ? Colors.green : Colors.grey,
-              width: 2,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.location_on,
-                    color: _locationAllowed ? Colors.green : Colors.grey,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Location',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  Spacer(),
-                  Switch(
-                    value: _locationAllowed,
-                    onChanged: (value) {
-                      if (value) {
-                        _openMapSearch();
-                      } else {
-                        setState(() {
-                          _locationAllowed = false;
-                          _signupLatitude = null;
-                          _signupLongitude = null;
-                          _signupAddress = null;
-                        });
-                      }
-                    },
-                    activeColor: Colors.green,
-                  ),
-                ],
-              ),
-              SizedBox(height: 8),
-              if (_locationAllowed && _signupAddress != null)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Address:',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    SizedBox(height: 4),
-                    Text(
-                      _signupAddress!,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                )
-              else if (_locationAllowed)
-                Text(
-                  'Please select a location on map',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.orange,
-                  ),
-                )
-              else
-                Text(
-                  'Enable location to help others in emergencies',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[600],
-                  ),
-                ),
-              if (_locationAllowed)
-                SizedBox(height: 8),
-              if (_locationAllowed)
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: _openMapSearch,
-                    icon: Icon(Icons.map, size: 18),
-                    label: Text('Set Location on Map'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-
-        const SizedBox(height: 15),
-
-        // Create Account Button
-        SizedBox(
-          width: double.infinity,
-          height: 50,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            onPressed: _isLoading ? null : _handleSignup,
-            child: _isLoading 
-              ? SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-              : const Text("Create Account"),
-          ),
-        ),
-      ],
-    );
-  }
-  
   void _openMapSearch() {
     Navigator.push(
       context,
@@ -885,50 +862,120 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     );
   }
 
+  Future<void> _handleLogin() async {
+    if (_loginEmailController.text.isEmpty || _loginPasswordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Please fill in all fields"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final result = await ApiService.login(
+      email: _loginEmailController.text.trim(),
+      password: _loginPasswordController.text,
+    );
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    if (result['success'] == true) {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => MainNavigation(),
+          transitionDuration: Duration(milliseconds: 500),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'Login failed'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
   Future<void> _handleSignup() async {
-    // Validation
     if (_signupNameController.text.isEmpty ||
         _signupEmailController.text.isEmpty ||
         _signupPhoneController.text.isEmpty ||
         _signupPasswordController.text.isEmpty ||
         _signupConfirmPasswordController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please fill in all required fields")),
+        SnackBar(
+          content: Text("Please fill in all required fields"),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (_signupPasswordController.text.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Password must be at least 6 characters")),
+        SnackBar(
+          content: Text("Password must be at least 6 characters"),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (_signupPasswordController.text != _signupConfirmPasswordController.text) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Passwords do not match")),
+        SnackBar(
+          content: Text("Passwords do not match"),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (_selectedBloodGroup == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please select your blood group")),
+        SnackBar(
+          content: Text("Please select your blood group"),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (_selectedSkill == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please select a skill")),
+        SnackBar(
+          content: Text("Please select a skill"),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
 
     if (_locationAllowed && (_signupLatitude == null || _signupLongitude == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please set your location on the map")),
+        SnackBar(
+          content: Text("Please set your location on the map"),
+          backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+        ),
       );
       return;
     }
@@ -958,11 +1005,10 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
         SnackBar(
           content: Text(result['message'] ?? 'Account created successfully'),
           backgroundColor: Colors.green,
+          behavior: SnackBarBehavior.floating,
         ),
       );
-      // Switch to login tab after successful signup
       _tabController.animateTo(0);
-      // Clear signup form
       _signupNameController.clear();
       _signupEmailController.clear();
       _signupPhoneController.clear();
@@ -981,13 +1027,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
         SnackBar(
           content: Text(result['message'] ?? 'Signup failed'),
           backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
         ),
       );
     }
   }
-
-
-
-
-
 }

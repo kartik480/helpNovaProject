@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'login_signup.dart';
+import 'splash_screen.dart';
 import 'services/notification_service.dart';
 
 // Global navigator key for showing dialogs from anywhere
@@ -30,16 +30,23 @@ void main() async {
   
   runApp(const MyApp());
 }
-class MyApp extends StatelessWidget{
+
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement build
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      home: LoginSignupScreen(),
+      title: 'Help Nova',
+      theme: ThemeData(
+        primarySwatch: Colors.red,
+        primaryColor: Colors.red,
+        scaffoldBackgroundColor: Colors.grey[100],
+        fontFamily: 'Roboto',
+      ),
+      home: SplashScreen(),
     );
   }
 }
