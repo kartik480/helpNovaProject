@@ -96,11 +96,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       debugPrint('[HomeScreen] Is Emergency: $isEmergency');
       debugPrint('[HomeScreen] Widget Mounted: $mounted');
       
-      if (isEmergency && mounted) {
+      if (isEmergency) {
         debugPrint('[HomeScreen] ✅ Emergency detected! Showing dialog...');
-        _showEmergencyDialog(message);
+        // Always try to show dialog, even if widget not mounted (will use NotificationService fallback)
+        if (mounted) {
+          _showEmergencyDialog(message);
+        } else {
+          debugPrint('[HomeScreen] ⚠️ Widget not mounted, using NotificationService...');
+          NotificationService.showEmergencyDialog(message);
+        }
       } else {
-        debugPrint('[HomeScreen] ❌ Not an emergency or widget not mounted');
+        debugPrint('[HomeScreen] ❌ Not an emergency notification');
       }
     });
   }
@@ -108,7 +114,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Show emergency dialog directly from this screen
   void _showEmergencyDialog(RemoteMessage message) {
     if (!mounted) {
-      debugPrint('[HomeScreen] ⚠️ Cannot show dialog - widget not mounted');
+      debugPrint('[HomeScreen] ⚠️ Cannot show dialog - widget not mounted, using NotificationService fallback');
+      // Try using NotificationService as fallback
+      NotificationService.showEmergencyDialog(message);
       return;
     }
     
@@ -125,15 +133,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     // Use SchedulerBinding to ensure dialog shows after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !context.mounted) {
-        debugPrint('[HomeScreen] ⚠️ Context not available after postFrameCallback');
+        debugPrint('[HomeScreen] ⚠️ Context not available after postFrameCallback, using NotificationService fallback...');
+        // Fallback to NotificationService
+        NotificationService.showEmergencyDialog(message);
         return;
       }
       
       try {
-        // Check if dialog is already showing
-        if (Navigator.of(context, rootNavigator: true).canPop()) {
-          debugPrint('[HomeScreen] ⚠️ Dialog might already be showing');
-        }
+        // Always try to show the dialog - don't check if one is already showing
+        // Multiple dialogs can be queued if needed
         
         showDialog(
           context: context,
@@ -152,8 +160,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         debugPrint('[HomeScreen] ❌ ERROR showing dialog: $e');
         debugPrint('[HomeScreen] Stack trace: ${StackTrace.current}');
         
-        // Retry after a short delay
+        // Retry using NotificationService as fallback
         Future.delayed(const Duration(milliseconds: 500), () {
+          NotificationService.showEmergencyDialog(message);
+        });
+        
+        // Also retry with home screen context after a short delay
+        Future.delayed(const Duration(milliseconds: 1000), () {
           if (mounted && context.mounted) {
             try {
               showDialog(

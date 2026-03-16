@@ -83,7 +83,7 @@ class NotificationService {
       
       if (isEmergency) {
         debugPrint('[NotificationService] ✅ Emergency SOS detected, showing dialog...');
-        _showEmergencyDialog(message);
+        showEmergencyDialog(message);
       } else {
         debugPrint('[NotificationService] ❌ Not an emergency SOS notification');
         debugPrint('  Title: $title');
@@ -135,8 +135,8 @@ class NotificationService {
     }
   }
 
-  // Show emergency notification dialog
-  static void _showEmergencyDialog(RemoteMessage message) {
+  // Show emergency notification dialog (public for fallback use)
+  static void showEmergencyDialog(RemoteMessage message) {
     try {
       final data = message.data;
       
@@ -300,7 +300,7 @@ class NotificationService {
         debugPrint('User ID: $userId');
         
         // Show the emergency dialog
-        _showEmergencyDialog(message);
+        showEmergencyDialog(message);
       } else {
         debugPrint('Not an emergency SOS notification');
       }
