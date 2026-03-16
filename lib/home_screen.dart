@@ -53,25 +53,44 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _setupNotificationListener() {
     // Listen for foreground messages directly in this screen
     _notificationSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('[HomeScreen] Notification received in foreground');
-      debugPrint('[HomeScreen] Message data: ${message.data}');
-      debugPrint('[HomeScreen] Notification title: ${message.notification?.title}');
+      debugPrint('========================================');
+      debugPrint('[HomeScreen] 🔔 FCM Notification Received');
+      debugPrint('[HomeScreen] Message ID: ${message.messageId}');
+      debugPrint('[HomeScreen] Title: ${message.notification?.title}');
+      debugPrint('[HomeScreen] Body: ${message.notification?.body}');
+      debugPrint('[HomeScreen] Data: ${message.data}');
+      debugPrint('[HomeScreen] Data Type: ${message.data['type']}');
+      debugPrint('[HomeScreen] Request ID: ${message.data['requestId']}');
+      debugPrint('[HomeScreen] User ID: ${message.data['userId']}');
+      debugPrint('========================================');
       
-      // Check if it's an emergency notification
+      // Check if it's an emergency notification - be more lenient
       final data = message.data;
       final title = message.notification?.title ?? '';
+      final body = message.notification?.body ?? '';
       final dataType = data['type'] ?? '';
       
+      // More comprehensive emergency detection
       final isEmergency = 
           dataType == 'emergency_sos' || 
+          dataType == 'emergency' ||
           title.toLowerCase().contains('emergency') ||
           title.toLowerCase().contains('sos') ||
           title.contains('🚨') ||
-          (data.containsKey('userId') && data.containsKey('latitude'));
+          body.toLowerCase().contains('emergency') ||
+          body.toLowerCase().contains('sos') ||
+          body.toLowerCase().contains('help') ||
+          (data.containsKey('userId') && data.containsKey('latitude')) ||
+          (data.containsKey('requestId') && data.containsKey('latitude'));
+      
+      debugPrint('[HomeScreen] Is Emergency: $isEmergency');
+      debugPrint('[HomeScreen] Widget Mounted: $mounted');
       
       if (isEmergency && mounted) {
-        debugPrint('[HomeScreen] Emergency notification detected, showing dialog...');
+        debugPrint('[HomeScreen] ✅ Emergency detected! Showing dialog...');
         _showEmergencyDialog(message);
+      } else {
+        debugPrint('[HomeScreen] ❌ Not an emergency or widget not mounted');
       }
     });
   }
@@ -79,55 +98,72 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Show emergency dialog directly from this screen
   void _showEmergencyDialog(RemoteMessage message) {
     if (!mounted) {
-      debugPrint('[HomeScreen] Cannot show dialog - widget not mounted');
+      debugPrint('[HomeScreen] ⚠️ Cannot show dialog - widget not mounted');
       return;
     }
     
     final data = message.data;
-    debugPrint('[HomeScreen] Showing emergency dialog with data: $data');
+    debugPrint('[HomeScreen] 📋 Dialog Data:');
+    debugPrint('  - User Name: ${data['userName']}');
+    debugPrint('  - User Phone: ${data['userPhone']}');
+    debugPrint('  - Latitude: ${data['latitude']}');
+    debugPrint('  - Longitude: ${data['longitude']}');
+    debugPrint('  - Description: ${data['description']}');
+    debugPrint('  - Request ID: ${data['requestId']}');
+    debugPrint('  - User ID: ${data['userId']}');
     
     // Use SchedulerBinding to ensure dialog shows after frame is built
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && context.mounted) {
-        try {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-                    builder: (context) => EmergencyNotificationDialog(
-                      userName: data['userName'] ?? 'User',
-                      userPhone: data['userPhone'] ?? '',
-                      latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-                      longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
-                      description: data['description'] ?? 'Emergency SOS request',
-                      requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
-                    ),
-          );
-          debugPrint('[HomeScreen] Emergency dialog shown successfully');
-        } catch (e) {
-          debugPrint('[HomeScreen] ERROR showing dialog: $e');
-          // Retry after a short delay
-          Future.delayed(const Duration(milliseconds: 300), () {
-            if (mounted && context.mounted) {
-              try {
-                showDialog(
-                  context: context,
-                  barrierDismissible: false,
-                    builder: (context) => EmergencyNotificationDialog(
-                      userName: data['userName'] ?? 'User',
-                      userPhone: data['userPhone'] ?? '',
-                      latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-                      longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
-                      description: data['description'] ?? 'Emergency SOS request',
-                      requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
-                    ),
-                );
-                debugPrint('[HomeScreen] Emergency dialog shown on retry');
-              } catch (retryError) {
-                debugPrint('[HomeScreen] ERROR on retry: $retryError');
-              }
-            }
-          });
+      if (!mounted || !context.mounted) {
+        debugPrint('[HomeScreen] ⚠️ Context not available after postFrameCallback');
+        return;
+      }
+      
+      try {
+        // Check if dialog is already showing
+        if (Navigator.of(context, rootNavigator: true).canPop()) {
+          debugPrint('[HomeScreen] ⚠️ Dialog might already be showing');
         }
+        
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) => EmergencyNotificationDialog(
+            userName: data['userName'] ?? 'User',
+            userPhone: data['userPhone'] ?? '',
+            latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
+            longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
+            description: data['description'] ?? 'Emergency SOS request',
+            requestId: data['requestId'] ?? data['userId'] ?? '',
+          ),
+        );
+        debugPrint('[HomeScreen] ✅ Emergency dialog shown successfully!');
+      } catch (e) {
+        debugPrint('[HomeScreen] ❌ ERROR showing dialog: $e');
+        debugPrint('[HomeScreen] Stack trace: ${StackTrace.current}');
+        
+        // Retry after a short delay
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted && context.mounted) {
+            try {
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (dialogContext) => EmergencyNotificationDialog(
+                  userName: data['userName'] ?? 'User',
+                  userPhone: data['userPhone'] ?? '',
+                  latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
+                  longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
+                  description: data['description'] ?? 'Emergency SOS request',
+                  requestId: data['requestId'] ?? data['userId'] ?? '',
+                ),
+              );
+              debugPrint('[HomeScreen] ✅ Emergency dialog shown on retry!');
+            } catch (retryError) {
+              debugPrint('[HomeScreen] ❌ ERROR on retry: $retryError');
+            }
+          }
+        });
       }
     });
   }

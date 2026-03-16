@@ -47,13 +47,16 @@ class NotificationService {
 
     // Handle foreground messages
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-      debugPrint('=== FOREGROUND MESSAGE RECEIVED ===');
-      debugPrint('Message ID: ${message.messageId}');
-      debugPrint('Notification title: ${message.notification?.title}');
-      debugPrint('Notification body: ${message.notification?.body}');
-      debugPrint('Data: ${message.data}');
-      debugPrint('Data type: ${message.data['type']}');
-      debugPrint('====================================');
+      debugPrint('========================================');
+      debugPrint('[NotificationService] 🔔 FOREGROUND MESSAGE');
+      debugPrint('[NotificationService] Message ID: ${message.messageId}');
+      debugPrint('[NotificationService] Title: ${message.notification?.title}');
+      debugPrint('[NotificationService] Body: ${message.notification?.body}');
+      debugPrint('[NotificationService] Data: ${message.data}');
+      debugPrint('[NotificationService] Data Type: ${message.data['type']}');
+      debugPrint('[NotificationService] Request ID: ${message.data['requestId']}');
+      debugPrint('[NotificationService] User ID: ${message.data['userId']}');
+      debugPrint('========================================');
       
       // Show notification dialog if it's an emergency SOS
       // Check multiple conditions to catch all emergency notifications
@@ -62,27 +65,31 @@ class NotificationService {
       final dataType = message.data['type'] ?? '';
       final clickAction = message.data['click_action'] ?? '';
       
+      // More comprehensive emergency detection
       final isEmergency = 
           dataType == 'emergency_sos' || 
+          dataType == 'emergency' ||
           clickAction == 'FLUTTER_NOTIFICATION_CLICK' ||
           title.toLowerCase().contains('emergency') ||
           title.toLowerCase().contains('sos') ||
           title.contains('🚨') ||
           body.toLowerCase().contains('emergency') ||
+          body.toLowerCase().contains('sos') ||
           body.toLowerCase().contains('help') ||
-          message.data.containsKey('userId') && message.data.containsKey('latitude');
+          (message.data.containsKey('userId') && message.data.containsKey('latitude')) ||
+          (message.data.containsKey('requestId') && message.data.containsKey('latitude'));
       
-      debugPrint('Emergency check result: $isEmergency');
+      debugPrint('[NotificationService] Is Emergency: $isEmergency');
       
       if (isEmergency) {
-        debugPrint('✅ Emergency SOS detected, showing dialog...');
+        debugPrint('[NotificationService] ✅ Emergency SOS detected, showing dialog...');
         _showEmergencyDialog(message);
       } else {
-        debugPrint('❌ Not an emergency SOS notification, skipping dialog');
-        debugPrint('Title: $title');
-        debugPrint('Body: $body');
-        debugPrint('Data type: $dataType');
-        debugPrint('Click action: $clickAction');
+        debugPrint('[NotificationService] ❌ Not an emergency SOS notification');
+        debugPrint('  Title: $title');
+        debugPrint('  Body: $body');
+        debugPrint('  Data type: $dataType');
+        debugPrint('  Click action: $clickAction');
       }
     });
 
@@ -206,26 +213,43 @@ class NotificationService {
   // Helper method to show dialog with context
   static void _showDialogWithContext(BuildContext context, Map<String, dynamic> data) {
     try {
+      debugPrint('[NotificationService] 📋 Showing dialog with data:');
+      debugPrint('  - User Name: ${data['userName']}');
+      debugPrint('  - User Phone: ${data['userPhone']}');
+      debugPrint('  - Latitude: ${data['latitude']}');
+      debugPrint('  - Longitude: ${data['longitude']}');
+      debugPrint('  - Description: ${data['description']}');
+      debugPrint('  - Request ID: ${data['requestId']}');
+      
       // Use SchedulerBinding to ensure the dialog shows after the frame is built
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) {
+        if (!context.mounted) {
+          debugPrint('[NotificationService] ⚠️ Context not mounted after postFrameCallback');
+          return;
+        }
+        
+        try {
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => EmergencyNotificationDialog(
+            builder: (dialogContext) => EmergencyNotificationDialog(
               userName: data['userName'] ?? 'User',
               userPhone: data['userPhone'] ?? '',
-              latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-              longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
+              latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
+              longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
               description: data['description'] ?? 'Emergency SOS request',
-              requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
+              requestId: data['requestId'] ?? data['userId'] ?? '',
             ),
           );
-          debugPrint('Dialog shown successfully');
+          debugPrint('[NotificationService] ✅ Dialog shown successfully!');
+        } catch (showError) {
+          debugPrint('[NotificationService] ❌ Error in showDialog: $showError');
         }
       });
     } catch (e) {
-      debugPrint('ERROR in _showDialogWithContext: $e');
+      debugPrint('[NotificationService] ❌ ERROR in _showDialogWithContext: $e');
+      debugPrint('[NotificationService] Stack trace: ${StackTrace.current}');
+      
       // Retry after a delay
       Future.delayed(const Duration(milliseconds: 500), () {
         final retryContext = navigatorKey?.currentContext;
@@ -234,19 +258,21 @@ class NotificationService {
             showDialog(
               context: retryContext,
               barrierDismissible: false,
-              builder: (context) => EmergencyNotificationDialog(
+              builder: (dialogContext) => EmergencyNotificationDialog(
                 userName: data['userName'] ?? 'User',
                 userPhone: data['userPhone'] ?? '',
-                latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-                longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
+                latitude: double.tryParse(data['latitude']?.toString() ?? '0') ?? 0,
+                longitude: double.tryParse(data['longitude']?.toString() ?? '0') ?? 0,
                 description: data['description'] ?? 'Emergency SOS request',
-                requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
+                requestId: data['requestId'] ?? data['userId'] ?? '',
               ),
             );
-            debugPrint('Dialog shown successfully on retry');
+            debugPrint('[NotificationService] ✅ Dialog shown successfully on retry!');
           } catch (retryError) {
-            debugPrint('ERROR on retry: $retryError');
+            debugPrint('[NotificationService] ❌ ERROR on retry: $retryError');
           }
+        } else {
+          debugPrint('[NotificationService] ⚠️ Retry context not available');
         }
       });
     }
