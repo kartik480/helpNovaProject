@@ -1,13 +1,22 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
-const connectDB = require("./config/db");
+const { connectDB, isConnected } = require("./config/db");
 
 // Load environment variables
 dotenv.config();
 
 // Connect to database
 connectDB();
+
+// Verify database connection before starting server
+setTimeout(() => {
+  if (!isConnected()) {
+    console.error("❌ Database connection failed. Server may not function correctly.");
+  } else {
+    console.log("✅ Database connection verified.");
+  }
+}, 2000);
 
 const app = express();
 

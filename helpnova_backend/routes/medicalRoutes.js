@@ -2,6 +2,8 @@ const express = require("express");
 const MedicalRequest = require("../models/MedicalRequest");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+const { isConnected } = require("../config/db");
 
 const router = express.Router();
 
@@ -32,10 +34,23 @@ const authenticateToken = (req, res, next) => {
 // Create a new medical emergency request
 router.post("/create", authenticateToken, async (req, res) => {
   try {
+    // Check database connection
+    if (!isConnected()) {
+      console.error(`[Medical Request] ❌ Database not connected!`);
+      return res.status(503).json({
+        message: "Database connection unavailable. Please try again later.",
+        success: false,
+      });
+    }
+    
+    console.log(`[Medical Request] Creating request for user ${req.userId}`);
+    console.log(`[Medical Request] Request body:`, JSON.stringify(req.body, null, 2));
+    
     const { patientCondition, description, numberOfPeople, photo, location } = req.body;
 
     // Validation
     if (!patientCondition || !description || !numberOfPeople || !location) {
+      console.log(`[Medical Request] Validation failed - missing fields`);
       return res.status(400).json({
         message: "Please provide all required fields",
         success: false,
@@ -43,6 +58,7 @@ router.post("/create", authenticateToken, async (req, res) => {
     }
 
     if (!location.latitude || !location.longitude) {
+      console.log(`[Medical Request] Validation failed - invalid location`);
       return res.status(400).json({
         message: "Please provide valid location coordinates",
         success: false,
@@ -63,22 +79,38 @@ router.post("/create", authenticateToken, async (req, res) => {
       status: 'pending',
     });
 
-    await medicalRequest.save();
+    console.log(`[Medical Request] Attempting to save request to database...`);
+    const savedRequest = await medicalRequest.save();
+    console.log(`[Medical Request] ✅ Request saved successfully with ID: ${savedRequest._id}`);
 
     // Populate user details
-    await medicalRequest.populate('userId', 'name email phone');
+    await savedRequest.populate('userId', 'name email phone');
+    console.log(`[Medical Request] ✅ Request populated with user details`);
 
     res.status(201).json({
       message: "Medical emergency request created successfully",
       success: true,
-      request: medicalRequest,
+      request: savedRequest,
     });
   } catch (error) {
-    console.error("Medical request creation error:", error);
+    console.error("❌ Medical request creation error:", error);
+    console.error("❌ Error stack:", error.stack);
+    
+    // More detailed error information
+    let errorMessage = "Server error. Please try again later.";
+    if (error.name === 'ValidationError') {
+      errorMessage = `Validation error: ${Object.values(error.errors).map(e => e.message).join(', ')}`;
+    } else if (error.name === 'MongoServerError') {
+      errorMessage = `Database error: ${error.message}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({
-      message: "Server error. Please try again later.",
+      message: errorMessage,
       success: false,
       error: error.message,
+      errorName: error.name,
     });
   }
 });

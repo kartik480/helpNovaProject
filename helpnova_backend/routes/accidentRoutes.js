@@ -32,6 +32,19 @@ const authenticateToken = (req, res, next) => {
 // Create a new accident report
 router.post("/create", authenticateToken, async (req, res) => {
   try {
+    // Check database connection
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.error(`[Accident Request] ❌ Database not connected!`);
+      return res.status(503).json({
+        message: "Database connection unavailable. Please try again later.",
+        success: false,
+      });
+    }
+    
+    console.log(`[Accident Request] Creating request for user ${req.userId}`);
+    console.log(`[Accident Request] Request body:`, JSON.stringify(req.body, null, 2));
+    
     const { accidentType, numberOfInjured, description, photo, location } = req.body;
 
     // Validation
@@ -63,22 +76,38 @@ router.post("/create", authenticateToken, async (req, res) => {
       status: 'pending',
     });
 
-    await accidentRequest.save();
+    console.log(`[Accident Request] Attempting to save request to database...`);
+    const savedRequest = await accidentRequest.save();
+    console.log(`[Accident Request] ✅ Request saved successfully with ID: ${savedRequest._id}`);
 
     // Populate user details
-    await accidentRequest.populate('userId', 'name email phone');
+    await savedRequest.populate('userId', 'name email phone');
+    console.log(`[Accident Request] ✅ Request populated with user details`);
 
     res.status(201).json({
       message: "Accident report created successfully",
       success: true,
-      request: accidentRequest,
+      request: savedRequest,
     });
   } catch (error) {
-    console.error("Accident request creation error:", error);
+    console.error("❌ Accident request creation error:", error);
+    console.error("❌ Error stack:", error.stack);
+    
+    // More detailed error information
+    let errorMessage = "Server error. Please try again later.";
+    if (error.name === 'ValidationError') {
+      errorMessage = `Validation error: ${Object.values(error.errors).map(e => e.message).join(', ')}`;
+    } else if (error.name === 'MongoServerError') {
+      errorMessage = `Database error: ${error.message}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({
-      message: "Server error. Please try again later.",
+      message: errorMessage,
       success: false,
       error: error.message,
+      errorName: error.name,
     });
   }
 });

@@ -32,10 +32,24 @@ const authenticateToken = (req, res, next) => {
 // Create a new volunteer request
 router.post("/create", authenticateToken, async (req, res) => {
   try {
+    // Check database connection
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.error(`[Volunteer Request] ❌ Database not connected!`);
+      return res.status(503).json({
+        message: "Database connection unavailable. Please try again later.",
+        success: false,
+      });
+    }
+    
+    console.log(`[Volunteer Request] Creating request for user ${req.userId}`);
+    console.log(`[Volunteer Request] Request body:`, JSON.stringify(req.body, null, 2));
+    
     const { helpType, description, location } = req.body;
 
     // Validation
     if (!helpType || !description || !location) {
+      console.log(`[Volunteer Request] Validation failed - missing fields`);
       return res.status(400).json({
         message: "Please provide all required fields",
         success: false,
@@ -43,6 +57,7 @@ router.post("/create", authenticateToken, async (req, res) => {
     }
 
     if (!location.latitude || !location.longitude) {
+      console.log(`[Volunteer Request] Validation failed - invalid location`);
       return res.status(400).json({
         message: "Please provide valid location coordinates",
         success: false,
@@ -61,22 +76,38 @@ router.post("/create", authenticateToken, async (req, res) => {
       status: 'pending',
     });
 
-    await volunteerRequest.save();
+    console.log(`[Volunteer Request] Attempting to save request to database...`);
+    const savedRequest = await volunteerRequest.save();
+    console.log(`[Volunteer Request] ✅ Request saved successfully with ID: ${savedRequest._id}`);
 
     // Populate user details
-    await volunteerRequest.populate('userId', 'name email phone');
+    await savedRequest.populate('userId', 'name email phone');
+    console.log(`[Volunteer Request] ✅ Request populated with user details`);
 
     res.status(201).json({
       message: "Volunteer request created successfully",
       success: true,
-      request: volunteerRequest,
+      request: savedRequest,
     });
   } catch (error) {
-    console.error("Volunteer request creation error:", error);
+    console.error("❌ Volunteer request creation error:", error);
+    console.error("❌ Error stack:", error.stack);
+    
+    // More detailed error information
+    let errorMessage = "Server error. Please try again later.";
+    if (error.name === 'ValidationError') {
+      errorMessage = `Validation error: ${Object.values(error.errors).map(e => e.message).join(', ')}`;
+    } else if (error.name === 'MongoServerError') {
+      errorMessage = `Database error: ${error.message}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({
-      message: "Server error. Please try again later.",
+      message: errorMessage,
       success: false,
       error: error.message,
+      errorName: error.name,
     });
   }
 });

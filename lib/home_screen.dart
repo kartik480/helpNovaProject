@@ -1453,6 +1453,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         icon = Icons.local_fire_department;
         color = Colors.red.shade700;
         break;
+      case 'emergency':
+        icon = Icons.warning;
+        color = Colors.red.shade900;
+        break;
       default:
         icon = Icons.help_outline;
         color = Colors.grey;

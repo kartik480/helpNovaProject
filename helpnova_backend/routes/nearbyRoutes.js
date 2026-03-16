@@ -11,6 +11,7 @@ const MechanicRequest = require("../models/MechanicRequest");
 const ElectricianRequest = require("../models/ElectricianRequest");
 const VolunteerRequest = require("../models/VolunteerRequest");
 const FireEmergencyRequest = require("../models/FireEmergencyRequest");
+const EmergencyRequest = require("../models/EmergencyRequest");
 
 const router = express.Router();
 
@@ -56,7 +57,7 @@ router.get("/nearby", authenticateToken, async (req, res) => {
 
     console.log(`[Nearby Requests] User ${req.userId} searching at (${userLat}, ${userLon}) within ${maxRadius}km radius`);
 
-    // Fetch all pending requests from all types
+    // Fetch all pending/active requests from all types
     const [
       medicalRequests,
       bloodRequests,
@@ -66,6 +67,7 @@ router.get("/nearby", authenticateToken, async (req, res) => {
       electricianRequests,
       volunteerRequests,
       fireRequests,
+      emergencyRequests,
     ] = await Promise.all([
       MedicalRequest.find({ status: 'pending' })
         .populate('userId', 'name email phone')
@@ -91,9 +93,12 @@ router.get("/nearby", authenticateToken, async (req, res) => {
       FireEmergencyRequest.find({ status: 'pending' })
         .populate('userId', 'name email phone')
         .sort({ createdAt: -1 }),
+      EmergencyRequest.find({ status: 'active' }) // SOS requests use 'active' status
+        .populate('userId', 'name email phone')
+        .sort({ createdAt: -1 }),
     ]);
 
-    console.log(`[Nearby Requests] Found requests: Medical=${medicalRequests.length}, Blood=${bloodRequests.length}, Accident=${accidentRequests.length}, Ambulance=${ambulanceRequests.length}, Mechanic=${mechanicRequests.length}, Electrician=${electricianRequests.length}, Volunteer=${volunteerRequests.length}, Fire=${fireRequests.length}`);
+    console.log(`[Nearby Requests] Found requests: Medical=${medicalRequests.length}, Blood=${bloodRequests.length}, Accident=${accidentRequests.length}, Ambulance=${ambulanceRequests.length}, Mechanic=${mechanicRequests.length}, Electrician=${electricianRequests.length}, Volunteer=${volunteerRequests.length}, Fire=${fireRequests.length}, Emergency/SOS=${emergencyRequests.length}`);
 
     // Combine and filter by distance
     const allRequests = [];
@@ -342,6 +347,37 @@ router.get("/nearby", authenticateToken, async (req, res) => {
       }
     });
 
+    // Process Emergency SOS Requests
+    emergencyRequests.forEach((req) => {
+      if (req.location && req.location.latitude && req.location.longitude) {
+        const distance = calculateDistance(
+          userLat,
+          userLon,
+          req.location.latitude,
+          req.location.longitude
+        );
+        if (distance <= maxRadius) {
+          allRequests.push({
+            id: req._id,
+            type: 'Emergency SOS',
+            typeCode: 'emergency',
+            title: `🚨 Emergency SOS - ${req.userName || 'Help Needed'}`,
+            description: req.description || 'Emergency SOS request',
+            distance: distance,
+            location: req.location,
+            userId: req.userId,
+            createdAt: req.createdAt,
+            data: {
+              userName: req.userName,
+              userPhone: req.userPhone,
+              type: req.type,
+              status: req.status,
+            },
+          });
+        }
+      }
+    });
+
     // Sort by distance (nearest first)
     allRequests.sort((a, b) => a.distance - b.distance);
 
@@ -383,7 +419,7 @@ router.get("/nearby", authenticateToken, async (req, res) => {
 // Test endpoint to check if requests exist (for debugging)
 router.get("/test", authenticateToken, async (req, res) => {
   try {
-    const [medicalCount, bloodCount, accidentCount, ambulanceCount, mechanicCount, electricianCount, volunteerCount, fireCount] = await Promise.all([
+    const [medicalCount, bloodCount, accidentCount, ambulanceCount, mechanicCount, electricianCount, volunteerCount, fireCount, emergencyCount] = await Promise.all([
       MedicalRequest.countDocuments({ status: 'pending' }),
       BloodRequest.countDocuments({ status: 'pending' }),
       AccidentRequest.countDocuments({ status: 'pending' }),
@@ -392,6 +428,7 @@ router.get("/test", authenticateToken, async (req, res) => {
       ElectricianRequest.countDocuments({ status: 'pending' }),
       VolunteerRequest.countDocuments({ status: 'pending' }),
       FireEmergencyRequest.countDocuments({ status: 'pending' }),
+      EmergencyRequest.countDocuments({ status: 'active' }),
     ]);
 
     // Get sample requests with location
@@ -409,7 +446,8 @@ router.get("/test", authenticateToken, async (req, res) => {
         electrician: electricianCount,
         volunteer: volunteerCount,
         fire: fireCount,
-        total: medicalCount + bloodCount + accidentCount + ambulanceCount + mechanicCount + electricianCount + volunteerCount + fireCount,
+        emergency: emergencyCount,
+        total: medicalCount + bloodCount + accidentCount + ambulanceCount + mechanicCount + electricianCount + volunteerCount + fireCount + emergencyCount,
       },
       samples: {
         medical: sampleMedical,
