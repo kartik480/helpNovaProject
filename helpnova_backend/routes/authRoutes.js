@@ -333,4 +333,72 @@ router.post("/update-location", async (req, res) => {
   }
 });
 
+// Get all active users with location enabled (for displaying on map)
+router.get("/active-users", async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ 
+        message: "No token provided",
+        success: false 
+      });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || "your-secret-key");
+    
+    // Get current user's location if available
+    const currentUser = await User.findById(decoded.userId).select("location");
+    const userLat = currentUser?.location?.latitude;
+    const userLon = currentUser?.location?.longitude;
+
+    // Find all users with location enabled and valid coordinates
+    // Only include users who updated location within the last 1 hour (active users)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
+
+    const activeUsers = await User.find({
+      _id: { $ne: decoded.userId }, // Exclude current user
+      locationAllowed: true, // Only users who allow location sharing
+      'location.latitude': { $ne: null, $exists: true }, // Only users with valid latitude
+      'location.longitude': { $ne: null, $exists: true }, // Only users with valid longitude
+      $or: [
+        { 'location.lastUpdated': { $gte: oneHourAgo } }, // Updated within last hour
+        { 'location.lastUpdated': null }, // Or never updated (newly enabled)
+        { 'location.lastUpdated': { $exists: false } } // Or field doesn't exist
+      ]
+    }).select("name phone location locationAllowed").limit(100); // Limit to 100 users for performance
+
+    // Format response
+    const usersList = activeUsers.map(user => ({
+      id: user._id.toString(),
+      name: user.name,
+      phone: user.phone,
+      latitude: user.location?.latitude,
+      longitude: user.location?.longitude,
+      lastUpdated: user.location?.lastUpdated,
+      locationAllowed: user.locationAllowed
+    }));
+
+    console.log(`[Active Users] Found ${usersList.length} active users with location enabled`);
+
+    res.json({
+      success: true,
+      users: usersList,
+      count: usersList.length,
+      currentUserLocation: userLat && userLon ? {
+        latitude: userLat,
+        longitude: userLon
+      } : null
+    });
+
+  } catch (error) {
+    console.error("Get active users error:", error);
+    res.status(401).json({ 
+      message: "Invalid or expired token",
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router;

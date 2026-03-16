@@ -37,6 +37,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   GoogleMapController? _mapController;
   bool isLocationEnabled = false;
   Timer? _locationUpdateTimer;
+  List<dynamic> activeUsers = []; // List of other users with location enabled
+  Timer? _activeUsersRefreshTimer;
 
   @override
   void initState() {
@@ -52,6 +54,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _notificationSubscription?.cancel();
     _locationUpdateTimer?.cancel();
+    _activeUsersRefreshTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
@@ -206,7 +209,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (permission == LocationPermission.denied) {
           setState(() {
             isLocationEnabled = false;
+            activeUsers = []; // Clear active users when location is disabled
           });
+          _activeUsersRefreshTimer?.cancel(); // Stop refreshing active users
           return;
         }
       }
@@ -214,7 +219,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (permission == LocationPermission.deniedForever) {
         setState(() {
           isLocationEnabled = false;
+          activeUsers = []; // Clear active users when location is disabled
         });
+        _activeUsersRefreshTimer?.cancel(); // Stop refreshing active users
         return;
       }
 
@@ -237,7 +244,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Start periodic location updates (every 2 minutes) to keep green marker active
       _startPeriodicLocationUpdates();
 
+      // Start periodic refresh of active users
+      _startActiveUsersRefresh();
+
+      // Load nearby requests and active users
       _loadNearbyRequests();
+      _loadActiveUsers();
     } catch (e) {
       print('Error getting location: $e');
     }
@@ -335,6 +347,96 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         nearbyRequests = [];
       }
     });
+  }
+
+  // Load active users with location enabled (for displaying on map)
+  Future<void> _loadActiveUsers() async {
+    if (!isLocationEnabled) {
+      setState(() {
+        activeUsers = [];
+      });
+      return;
+    }
+
+    try {
+      debugPrint('[HomeScreen] Loading active users with location enabled...');
+      final result = await ApiService.getActiveUsers();
+
+      if (result['success'] == true) {
+        setState(() {
+          activeUsers = result['users'] ?? [];
+        });
+        debugPrint('[HomeScreen] ✅ Loaded ${activeUsers.length} active users');
+      } else {
+        debugPrint('[HomeScreen] ❌ Failed to load active users: ${result['message']}');
+        setState(() {
+          activeUsers = [];
+        });
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Error loading active users: $e');
+      setState(() {
+        activeUsers = [];
+      });
+    }
+  }
+
+  // Start periodic refresh of active users (every 30 seconds)
+  void _startActiveUsersRefresh() {
+    _activeUsersRefreshTimer?.cancel();
+    _activeUsersRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (mounted && isLocationEnabled) {
+        await _loadActiveUsers();
+      }
+    });
+  }
+
+  // Build map markers for current user and all active users
+  Set<Marker> _buildMapMarkers() {
+    Set<Marker> markers = {};
+
+    // Add marker for current user (green)
+    if (userLatitude != null && userLongitude != null) {
+      markers.add(
+        Marker(
+          markerId: MarkerId('my_location'),
+          position: LatLng(userLatitude!, userLongitude!),
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          infoWindow: InfoWindow(
+            title: 'Your Location',
+            snippet: 'You are active and can receive alerts',
+          ),
+        ),
+      );
+    }
+
+    // Add markers for other active users (also green)
+    for (var user in activeUsers) {
+      try {
+        final lat = user['latitude'] as double?;
+        final lon = user['longitude'] as double?;
+        final userName = user['name'] as String? ?? 'User';
+        final userId = user['id'] as String? ?? '';
+
+        if (lat != null && lon != null && userId.isNotEmpty) {
+          markers.add(
+            Marker(
+              markerId: MarkerId('user_$userId'),
+              position: LatLng(lat, lon),
+              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+              infoWindow: InfoWindow(
+                title: userName,
+                snippet: 'Active helper nearby',
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('[HomeScreen] Error adding marker for user: $e');
+      }
+    }
+
+    return markers;
   }
 
   @override
@@ -484,17 +586,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                       target: LatLng(userLatitude!, userLongitude!),
                                       zoom: 15,
                                     ),
-                                    markers: {
-                                      Marker(
-                                        markerId: MarkerId('my_location'),
-                                        position: LatLng(userLatitude!, userLongitude!),
-                                        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-                                        infoWindow: InfoWindow(
-                                          title: 'Your Location',
-                                          snippet: 'You are active and can receive alerts',
-                                        ),
-                                      ),
-                                    },
+                                    markers: _buildMapMarkers(),
                                     myLocationEnabled: false, // We're using custom marker
                                     myLocationButtonEnabled: false,
                                     mapType: MapType.normal,
