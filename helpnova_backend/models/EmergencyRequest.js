@@ -69,6 +69,21 @@ const emergencyRequestSchema = new mongoose.Schema({
     distance: {
       type: Number,
       default: null
+    },
+    // Real-time location tracking for helpers
+    location: {
+      latitude: {
+        type: Number,
+        default: null
+      },
+      longitude: {
+        type: Number,
+        default: null
+      },
+      lastUpdated: {
+        type: Date,
+        default: null
+      }
     }
   }],
   notifiedUsers: [{

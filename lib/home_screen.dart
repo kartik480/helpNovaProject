@@ -555,81 +555,110 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                         // Location Status Map - Shows green marker when location is enabled
                         if (userLatitude != null && userLongitude != null && isLocationEnabled)
-                          Container(
-                            height: 200,
-                            margin: EdgeInsets.only(bottom: Responsive.spacing(context, 20)),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(16),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 10,
-                                  offset: Offset(0, 4),
+                          Column(
+                            children: [
+                              Container(
+                                height: 200,
+                                margin: EdgeInsets.only(bottom: Responsive.spacing(context, 20)),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 10,
+                                      offset: Offset(0, 4),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(16),
-                              child: Stack(
-                                children: [
-                                  GoogleMap(
-                                    onMapCreated: (GoogleMapController controller) {
-                                      _mapController = controller;
-                                      controller.animateCamera(
-                                        CameraUpdate.newLatLngZoom(
-                                          LatLng(userLatitude!, userLongitude!),
-                                          15,
-                                        ),
-                                      );
-                                    },
-                                    initialCameraPosition: CameraPosition(
-                                      target: LatLng(userLatitude!, userLongitude!),
-                                      zoom: 15,
-                                    ),
-                                    markers: _buildMapMarkers(),
-                                    myLocationEnabled: false, // We're using custom marker
-                                    myLocationButtonEnabled: false,
-                                    mapType: MapType.normal,
-                                    zoomControlsEnabled: true,
-                                    compassEnabled: true,
-                                  ),
-                                  // Status indicator overlay
-                                  Positioned(
-                                    top: 10,
-                                    left: 10,
-                                    child: Container(
-                                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green,
-                                        borderRadius: BorderRadius.circular(20),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: Colors.green.withOpacity(0.3),
-                                            blurRadius: 8,
-                                            spreadRadius: 2,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.location_on, color: Colors.white, size: 18),
-                                          SizedBox(width: 6),
-                                          Text(
-                                            'Active',
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 14,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Stack(
+                                    children: [
+                                      GoogleMap(
+                                        onMapCreated: (GoogleMapController controller) {
+                                          _mapController = controller;
+                                          controller.animateCamera(
+                                            CameraUpdate.newLatLngZoom(
+                                              LatLng(userLatitude!, userLongitude!),
+                                              15,
                                             ),
+                                          );
+                                        },
+                                        initialCameraPosition: CameraPosition(
+                                          target: LatLng(userLatitude!, userLongitude!),
+                                          zoom: 15,
+                                        ),
+                                        markers: _buildMapMarkers(),
+                                        myLocationEnabled: false, // We're using custom marker
+                                        myLocationButtonEnabled: false,
+                                        mapType: MapType.normal,
+                                        zoomControlsEnabled: true,
+                                        compassEnabled: true,
+                                      ),
+                                      // Status indicator overlay
+                                      Positioned(
+                                        top: 10,
+                                        left: 10,
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.green,
+                                            borderRadius: BorderRadius.circular(20),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.green.withOpacity(0.3),
+                                                blurRadius: 8,
+                                                spreadRadius: 2,
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.location_on, color: Colors.white, size: 18),
+                                              SizedBox(width: 6),
+                                              Text(
+                                                'Active',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              // Display coordinates under the map
+                              Container(
+                                margin: EdgeInsets.only(bottom: Responsive.spacing(context, 20)),
+                                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue.shade50,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.blue.shade200),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.location_on, color: Colors.blue.shade700, size: 16),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Lat: ${userLatitude!.toStringAsFixed(6)}, Lng: ${userLongitude!.toStringAsFixed(6)}',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.blue.shade900,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
+                            ],
                           )
                         else if (!isLocationEnabled)
                           Container(

@@ -312,13 +312,18 @@ router.post("/accept-request/:requestId", authenticateToken, async (req, res) =>
       );
     }
 
-    // Add helper to accepted helpers list
+    // Add helper to accepted helpers list with current location
     emergencyRequest.acceptedHelpers.push({
       helperId: helper._id,
       helperName: helper.name,
       helperPhone: helper.phone,
       acceptedAt: new Date(),
       distance: distance,
+      location: helper.location && helper.location.latitude && helper.location.longitude ? {
+        latitude: helper.location.latitude,
+        longitude: helper.location.longitude,
+        lastUpdated: new Date()
+      } : null
     });
 
     await emergencyRequest.save();
@@ -364,6 +369,134 @@ router.get("/request/:requestId/helpers", authenticateToken, async (req, res) =>
     });
   } catch (error) {
     console.error("Get accepted helpers error:", error);
+    res.status(500).json({
+      message: "Server error. Please try again later.",
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Update helper location for an active emergency request
+router.post("/update-helper-location/:requestId", authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { latitude, longitude } = req.body;
+
+    if (!latitude || !longitude) {
+      return res.status(400).json({
+        message: "Latitude and longitude are required",
+        success: false,
+      });
+    }
+
+    // Find the emergency request
+    const emergencyRequest = await EmergencyRequest.findById(requestId);
+    if (!emergencyRequest) {
+      return res.status(404).json({
+        message: "Emergency request not found",
+        success: false,
+      });
+    }
+
+    // Check if request is still active
+    if (emergencyRequest.status !== "active") {
+      return res.status(400).json({
+        message: "This emergency request is no longer active",
+        success: false,
+      });
+    }
+
+    // Find the helper in acceptedHelpers array
+    const helperIndex = emergencyRequest.acceptedHelpers.findIndex(
+      (h) => h.helperId.toString() === req.userId.toString()
+    );
+
+    if (helperIndex === -1) {
+      return res.status(404).json({
+        message: "You have not accepted this emergency request",
+        success: false,
+      });
+    }
+
+    // Update helper location
+    emergencyRequest.acceptedHelpers[helperIndex].location = {
+      latitude: latitude,
+      longitude: longitude,
+      lastUpdated: new Date()
+    };
+
+    // Recalculate distance
+    const distance = calculateDistance(
+      emergencyRequest.location.latitude,
+      emergencyRequest.location.longitude,
+      latitude,
+      longitude
+    );
+    emergencyRequest.acceptedHelpers[helperIndex].distance = distance;
+
+    await emergencyRequest.save();
+
+    console.log(`📍 Helper ${req.userId} updated location for request ${requestId}: ${latitude}, ${longitude}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Location updated successfully",
+      distance: distance,
+    });
+  } catch (error) {
+    console.error("Update helper location error:", error);
+    res.status(500).json({
+      message: "Server error. Please try again later.",
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Get real-time helper locations for victim's active emergency request
+router.get("/my-active-request/helpers-locations", authenticateToken, async (req, res) => {
+  try {
+    // Find the user's latest active emergency request
+    const activeRequest = await EmergencyRequest.findOne({
+      userId: req.userId,
+      status: "active"
+    }).sort({ createdAt: -1 });
+
+    if (!activeRequest) {
+      return res.status(200).json({
+        success: true,
+        message: "No active emergency request found",
+        helpers: [],
+        requestId: null,
+      });
+    }
+
+    // Format helpers with their locations
+    const helpersWithLocations = activeRequest.acceptedHelpers
+      .filter(helper => helper.location && helper.location.latitude && helper.location.longitude)
+      .map(helper => ({
+        helperId: helper.helperId.toString(),
+        name: helper.helperName,
+        phone: helper.helperPhone,
+        latitude: helper.location.latitude,
+        longitude: helper.location.longitude,
+        distance: helper.distance,
+        lastUpdated: helper.location.lastUpdated,
+        acceptedAt: helper.acceptedAt
+      }));
+
+    console.log(`📍 Fetched ${helpersWithLocations.length} helpers with locations for request ${activeRequest._id}`);
+
+    res.status(200).json({
+      success: true,
+      requestId: activeRequest._id.toString(),
+      helpers: helpersWithLocations,
+      count: helpersWithLocations.length,
+      message: "Helper locations fetched successfully",
+    });
+  } catch (error) {
+    console.error("Get helper locations error:", error);
     res.status(500).json({
       message: "Server error. Please try again later.",
       success: false,

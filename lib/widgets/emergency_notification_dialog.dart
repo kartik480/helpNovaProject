@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:geolocator/geolocator.dart';
+import 'dart:async';
 import '../services/api_service.dart';
 
-class EmergencyNotificationDialog extends StatelessWidget {
+class EmergencyNotificationDialog extends StatefulWidget {
   final String userName;
   final String userPhone;
   final double latitude;
@@ -20,6 +22,55 @@ class EmergencyNotificationDialog extends StatelessWidget {
     required this.requestId,
   });
 
+  @override
+  State<EmergencyNotificationDialog> createState() => _EmergencyNotificationDialogState();
+}
+
+class _EmergencyNotificationDialogState extends State<EmergencyNotificationDialog> {
+  Timer? _locationUpdateTimer;
+  bool _isUpdatingLocation = false;
+
+  @override
+  void dispose() {
+    _locationUpdateTimer?.cancel();
+    super.dispose();
+  }
+
+  // Start sending location updates for accepted request
+  void _startLocationUpdates(String requestId) {
+    _locationUpdateTimer?.cancel();
+    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (!mounted || _isUpdatingLocation) return;
+      
+      try {
+        final position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+        
+        setState(() {
+          _isUpdatingLocation = true;
+        });
+        
+        await ApiService.updateHelperLocation(
+          requestId: requestId,
+          latitude: position.latitude,
+          longitude: position.longitude,
+        );
+        
+        setState(() {
+          _isUpdatingLocation = false;
+        });
+        
+        print('[Helper] Updated location for request $requestId: ${position.latitude}, ${position.longitude}');
+      } catch (e) {
+        print('[Helper] Error updating location: $e');
+        setState(() {
+          _isUpdatingLocation = false;
+        });
+      }
+    });
+  }
+
   Future<void> _acceptRequest(BuildContext context) async {
     // Show loading
     showDialog(
@@ -29,18 +80,45 @@ class EmergencyNotificationDialog extends StatelessWidget {
     );
 
     try {
+      // Get current location first
+      Position? currentPosition;
+      try {
+        currentPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+        );
+      } catch (e) {
+        print('Error getting location: $e');
+      }
+
       // Call the API to accept the emergency request
-      final result = await ApiService.acceptEmergencyRequest(requestId);
+      final result = await ApiService.acceptEmergencyRequest(widget.requestId);
       
       if (context.mounted) {
         Navigator.pop(context); // Close loading
         
         if (result['success'] == true) {
+          // Send initial location update if available
+          if (currentPosition != null) {
+            try {
+              await ApiService.updateHelperLocation(
+                requestId: widget.requestId,
+                latitude: currentPosition.latitude,
+                longitude: currentPosition.longitude,
+              );
+              print('[Helper] Sent initial location after accepting request');
+            } catch (e) {
+              print('[Helper] Error sending initial location: $e');
+            }
+          }
+          
+          // Start periodic location updates
+          _startLocationUpdates(widget.requestId);
+          
           Navigator.pop(context); // Close notification dialog
           
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result['message'] ?? 'Request accepted! You will be contacted soon.'),
+              content: Text(result['message'] ?? 'Request accepted! Your location is being shared.'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
             ),
@@ -71,7 +149,7 @@ class EmergencyNotificationDialog extends StatelessWidget {
   }
 
   Future<void> _callUser(BuildContext context) async {
-    final uri = Uri.parse('tel:$userPhone');
+    final uri = Uri.parse('tel:${widget.userPhone}');
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri);
@@ -85,7 +163,7 @@ class EmergencyNotificationDialog extends StatelessWidget {
   }
 
   Future<void> _navigateToLocation(BuildContext context) async {
-    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$latitude,$longitude');
+    final uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=${widget.latitude},${widget.longitude}');
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -149,7 +227,7 @@ class EmergencyNotificationDialog extends StatelessWidget {
             
             // User Name
             Text(
-              '$userName needs immediate help!',
+              '${widget.userName} needs immediate help!',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 18,
@@ -160,11 +238,11 @@ class EmergencyNotificationDialog extends StatelessWidget {
             const SizedBox(height: 8),
             
             // Description
-            if (description.isNotEmpty)
+            if (widget.description.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
-                  description,
+                  widget.description,
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,

@@ -1306,6 +1306,143 @@ class ApiService {
     }
   }
 
+  // Update helper location for an active emergency request
+  static Future<Map<String, dynamic>> updateHelperLocation({
+    required String requestId,
+    required double latitude,
+    required double longitude,
+  }) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/emergency/update-helper-location/$requestId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'latitude': latitude,
+          'longitude': longitude,
+        }),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Location updated successfully',
+          'distance': data['distance'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to update location',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
+
+  // Get real-time helper locations for victim's active emergency request
+  static Future<Map<String, dynamic>> getHelperLocations() async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+          'helpers': [],
+        };
+      }
+
+      final response = await http.get(
+        Uri.parse('$baseUrl/emergency/my-active-request/helpers-locations'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+          'helpers': [],
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'helpers': data['helpers'] ?? [],
+          'requestId': data['requestId'],
+          'count': data['count'] ?? 0,
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to fetch helper locations',
+          'helpers': [],
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+        'helpers': [],
+      };
+    }
+  }
+
   // Get all active users with location enabled (for displaying on map)
   static Future<Map<String, dynamic>> getActiveUsers() async {
     try {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:async';
 import 'widgets/radar_map_panel.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
@@ -20,12 +21,23 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   bool isLoadingHelpers = false;
   bool isSendingAlert = false;
   List<Map<String, dynamic>> acceptedHelpers = [];
+  List<Map<String, dynamic>> helperLocations = []; // Real-time helper locations
+  List<Map<String, dynamic>> activeUsers = []; // All active users with location enabled
   Map<String, dynamic>? requestInfo;
+  Timer? _helperLocationTimer;
+  Timer? _activeUsersTimer;
 
   @override
   void initState() {
     super.initState();
     _getUserLocation();
+  }
+
+  @override
+  void dispose() {
+    _helperLocationTimer?.cancel();
+    _activeUsersTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _getUserLocation() async {
@@ -68,11 +80,67 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       
       // Fetch accepted helpers once location is available
       _loadAcceptedHelpers();
+      _loadHelperLocations();
+      _loadActiveUsers();
+      _startPeriodicUpdates();
     } catch (e) {
       print('Error getting location: $e');
       setState(() {
         isLoadingLocation = false;
       });
+    }
+  }
+
+  // Start periodic updates for helper locations and active users
+  void _startPeriodicUpdates() {
+    // Update helper locations every 5 seconds
+    _helperLocationTimer?.cancel();
+    _helperLocationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (mounted) {
+        _loadHelperLocations();
+      } else {
+        timer.cancel();
+      }
+    });
+
+    // Update active users every 10 seconds
+    _activeUsersTimer?.cancel();
+    _activeUsersTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (mounted) {
+        _loadActiveUsers();
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  // Load real-time helper locations for active emergency
+  Future<void> _loadHelperLocations() async {
+    try {
+      final result = await ApiService.getHelperLocations();
+      if (result['success'] == true) {
+        setState(() {
+          helperLocations = List<Map<String, dynamic>>.from(result['helpers'] ?? []);
+        });
+        print('[EmergencySOS] Loaded ${helperLocations.length} helper locations');
+      }
+    } catch (e) {
+      print('Error loading helper locations: $e');
+    }
+  }
+
+  // Load all active users with location enabled
+  Future<void> _loadActiveUsers() async {
+    try {
+      final result = await ApiService.getActiveUsers();
+      if (result['success'] == true) {
+        setState(() {
+          activeUsers = List<Map<String, dynamic>>.from(result['users'] ?? []);
+        });
+        print('[EmergencySOS] Loaded ${activeUsers.length} active users');
+      }
+    } catch (e) {
+      print('Error loading active users: $e');
     }
   }
 
@@ -162,9 +230,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             ),
           );
           
-          // Refresh accepted helpers after a short delay
+          // Refresh accepted helpers and locations after a short delay
           Future.delayed(Duration(seconds: 2), () {
             _loadAcceptedHelpers();
+            _loadHelperLocations();
+            _loadActiveUsers();
           });
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -373,10 +443,67 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
               ),
             )
           else if (userLatitude != null && userLongitude != null)
-            RadarMapPanel(
-              userLatitude: userLatitude!,
-              userLongitude: userLongitude!,
-              helpers: acceptedHelpers,
+            Column(
+              children: [
+                RadarMapPanel(
+                  userLatitude: userLatitude!,
+                  userLongitude: userLongitude!,
+                  helpers: acceptedHelpers,
+                  helperLocations: helperLocations,
+                  activeUsers: activeUsers,
+                ),
+                // Display coordinates under the map
+                Container(
+                  margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.location_on, color: Colors.red.shade700, size: 16),
+                      SizedBox(width: 8),
+                      Text(
+                        'Your Location: Lat ${userLatitude!.toStringAsFixed(6)}, Lng ${userLongitude!.toStringAsFixed(6)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.red.shade900,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Display helper count
+                if (helperLocations.isNotEmpty || activeUsers.isNotEmpty)
+                  Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.green.shade200),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.people, color: Colors.green.shade700, size: 16),
+                        SizedBox(width: 8),
+                        Text(
+                          '${helperLocations.length} Helper${helperLocations.length != 1 ? 's' : ''} on Map | ${activeUsers.length} Active User${activeUsers.length != 1 ? 's' : ''}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.green.shade900,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             )
           else
             Container(
