@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -252,8 +253,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         return;
       }
 
+      // For web, force fresh location and use highest accuracy
+      // timeLimit forces the API to get a fresh location instead of using cached one
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: kIsWeb ? const Duration(seconds: 10) : const Duration(seconds: 15),
+        // For web, this helps ensure we get the most accurate location
       );
 
       setState(() {
@@ -333,6 +338,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         try {
           Position position = await Geolocator.getCurrentPosition(
             desiredAccuracy: LocationAccuracy.high,
+            timeLimit: kIsWeb ? const Duration(seconds: 10) : const Duration(seconds: 15),
           );
           setState(() {
             userLatitude = position.latitude;

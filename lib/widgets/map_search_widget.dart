@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
@@ -125,6 +126,7 @@ class _MapSearchWidgetState extends State<MapSearchWidget> {
 
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: kIsWeb ? const Duration(seconds: 10) : const Duration(seconds: 15),
       );
 
       final address = await GeocodingService.getAddressFromCoordinates(
