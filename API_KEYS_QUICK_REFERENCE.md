@@ -52,7 +52,7 @@ static const String _apiKey = 'YOUR_BACKEND_API_KEY_HERE';
 **Restrictions:**
 - Application: IP addresses (web servers)
 - IP: Your backend server IP (or `0.0.0.0/0` for dev - NOT recommended)
-- APIs: Geocoding API, Places API, Distance Matrix API
+- APIs: Geocoding API, Places API, Distance Matrix API, **Directions API** (for navigation/routing)
 
 ---
 

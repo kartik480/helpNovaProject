@@ -324,4 +324,105 @@ class GeocodingService {
     
     return distances;
   }
+
+  /// Get route between two points using Google Directions API
+  /// Returns a list of LatLng points representing the route polyline
+  static Future<List<Map<String, double>>?> getRoute(
+    double originLat,
+    double originLng,
+    double destLat,
+    double destLng,
+  ) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/directions/json'
+        '?origin=$originLat,$originLng'
+        '&destination=$destLat,$destLng'
+        '&mode=driving'
+        '&key=$_apiKey',
+      );
+
+      final response = await http.get(url).timeout(
+        Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Directions API request timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        if (data['status'] == 'OK' && data['routes'] != null) {
+          final routes = data['routes'] as List;
+          if (routes.isNotEmpty) {
+            final route = routes[0] as Map<String, dynamic>;
+            final overviewPolyline = route['overview_polyline'] as Map<String, dynamic>?;
+            
+            if (overviewPolyline != null) {
+              final encodedPolyline = overviewPolyline['points'] as String?;
+              if (encodedPolyline != null) {
+                // Decode polyline to get list of LatLng points
+                return _decodePolyline(encodedPolyline);
+              }
+            }
+          }
+        } else {
+          print('Directions API error: ${data['status']}');
+          if (data['error_message'] != null) {
+            print('Error message: ${data['error_message']}');
+          }
+        }
+      } else {
+        print('Directions API HTTP error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Directions API error: $e');
+    }
+    
+    return null;
+  }
+
+  /// Decode Google Maps polyline string to list of coordinates
+  /// Polyline encoding algorithm: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
+  static List<Map<String, double>> _decodePolyline(String encoded) {
+    List<Map<String, double>> points = [];
+    int index = 0;
+    int lat = 0;
+    int lng = 0;
+
+    while (index < encoded.length) {
+      int shift = 0;
+      int result = 0;
+      int b;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0) ? ~(result >> 1) : (result >> 1);
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0) ? ~(result >> 1) : (result >> 1);
+      lng += dlng;
+
+      points.add({
+        'lat': lat / 1e5,
+        'lng': lng / 1e5,
+      });
+    }
+
+    return points;
+  }
+
+  /// Get place coordinates from place ID (public method for external use)
+  static Future<Map<String, double>?> getPlaceCoordinates(String placeId) async {
+    return _getPlaceCoordinates(placeId);
+  }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import 'profile_screen.dart';
 import 'services/api_service.dart';
@@ -41,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   List<dynamic> emergencyAlerts = []; // Active emergency alerts/alerts
   Timer? _activeUsersRefreshTimer;
   Timer? _emergencyAlertsTimer;
+  Set<Polyline> _polylines = {}; // Route polylines for navigation
 
   @override
   void initState() {
@@ -323,10 +325,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Start periodic location updates to keep green marker active
+  // Start periodic location updates for live tracking (every 15 seconds)
   void _startPeriodicLocationUpdates() {
     _locationUpdateTimer?.cancel();
-    _locationUpdateTimer = Timer.periodic(const Duration(minutes: 2), (timer) async {
+    _locationUpdateTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (mounted && isLocationEnabled) {
         try {
           Position position = await Geolocator.getCurrentPosition(
@@ -402,6 +404,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           activeUsers = result['users'] ?? [];
         });
         debugPrint('[HomeScreen] ✅ Loaded ${activeUsers.length} active users');
+        
+        // Auto-fit camera to show all markers after loading users
+        _fitMapToShowAllMarkers();
       } else {
         debugPrint('[HomeScreen] ❌ Failed to load active users: ${result['message']}');
         setState(() {
@@ -416,10 +421,173 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  // Start periodic refresh of active users (every 30 seconds)
+  // Auto-fit camera to show all markers (current user + helpers + emergencies)
+  void _fitMapToShowAllMarkers() {
+    if (_mapController == null) return;
+    
+    final List<LatLng> points = [];
+    
+    // Add current user location
+    if (userLatitude != null && userLongitude != null) {
+      points.add(LatLng(userLatitude!, userLongitude!));
+    }
+    
+    // Add active users locations
+    for (var user in activeUsers) {
+      final lat = user['latitude'] as double?;
+      final lon = user['longitude'] as double?;
+      if (lat != null && lon != null) {
+        points.add(LatLng(lat, lon));
+      }
+    }
+    
+    // Add emergency alerts locations
+    for (var alert in emergencyAlerts) {
+      final lat = alert['latitude'];
+      final lon = alert['longitude'];
+      if (lat != null && lon != null) {
+        final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
+        final longitude = lon is double ? lon : (lon is String ? double.tryParse(lon) : lon as double?);
+        if (latitude != null && longitude != null) {
+          points.add(LatLng(latitude, longitude));
+        }
+      }
+    }
+    
+    // Only fit bounds if we have multiple points
+    if (points.length > 1) {
+      // Calculate bounds
+      double minLat = points[0].latitude;
+      double maxLat = points[0].latitude;
+      double minLng = points[0].longitude;
+      double maxLng = points[0].longitude;
+      
+      for (var point in points) {
+        minLat = point.latitude < minLat ? point.latitude : minLat;
+        maxLat = point.latitude > maxLat ? point.latitude : maxLat;
+        minLng = point.longitude < minLng ? point.longitude : minLng;
+        maxLng = point.longitude > maxLng ? point.longitude : maxLng;
+      }
+      
+      // Add padding
+      final latPadding = (maxLat - minLat) * 0.2;
+      final lngPadding = (maxLng - minLng) * 0.2;
+      
+      final bounds = LatLngBounds(
+        southwest: LatLng(minLat - latPadding, minLng - lngPadding),
+        northeast: LatLng(maxLat + latPadding, maxLng + lngPadding),
+      );
+      
+      _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+    } else if (points.length == 1) {
+      // Just center on the single point
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(points[0], 15),
+      );
+    }
+  }
+
+  // Get route and display it on map
+  Future<void> _showRouteToDestination(double destLat, double destLng, String destinationId) async {
+    if (userLatitude == null || userLongitude == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Your location is not available')),
+      );
+      return;
+    }
+
+    // Show loading
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Getting route...'), duration: Duration(seconds: 1)),
+    );
+
+    try {
+      final routePoints = await GeocodingService.getRoute(
+        userLatitude!,
+        userLongitude!,
+        destLat,
+        destLng,
+      );
+
+      if (routePoints != null && routePoints.isNotEmpty) {
+        // Convert to LatLng list
+        final polylinePoints = routePoints.map((point) => LatLng(point['lat']!, point['lng']!)).toList();
+
+        setState(() {
+          _polylines = {
+            Polyline(
+              polylineId: PolylineId('route_$destinationId'),
+              points: polylinePoints,
+              color: Colors.blue,
+              width: 5,
+              patterns: [],
+            ),
+          };
+        });
+
+        // Fit camera to show route
+        if (_mapController != null && polylinePoints.isNotEmpty) {
+          final bounds = LatLngBounds(
+            southwest: LatLng(
+              polylinePoints.map((p) => p.latitude).reduce((a, b) => a < b ? a : b),
+              polylinePoints.map((p) => p.longitude).reduce((a, b) => a < b ? a : b),
+            ),
+            northeast: LatLng(
+              polylinePoints.map((p) => p.latitude).reduce((a, b) => a > b ? a : b),
+              polylinePoints.map((p) => p.longitude).reduce((a, b) => a > b ? a : b),
+            ),
+          );
+          _mapController!.animateCamera(CameraUpdate.newLatLngBounds(bounds, 100));
+        }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Route displayed'), duration: Duration(seconds: 2)),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not get route. Opening in Google Maps...')),
+        );
+        // Fallback: Open in Google Maps app
+        _openInGoogleMaps(destLat, destLng);
+      }
+    } catch (e) {
+      print('[HomeScreen] Error getting route: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error getting route. Opening in Google Maps...')),
+      );
+      _openInGoogleMaps(destLat, destLng);
+    }
+  }
+
+  // Open destination in Google Maps app
+  Future<void> _openInGoogleMaps(double lat, double lng) async {
+    final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+    try {
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url, mode: LaunchMode.externalApplication);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open Google Maps')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error opening Google Maps: $e')),
+      );
+    }
+  }
+
+  // Clear route from map
+  void _clearRoute() {
+    setState(() {
+      _polylines = {};
+    });
+  }
+
+  // Start periodic refresh of active users for live tracking (every 15 seconds)
   void _startActiveUsersRefresh() {
     _activeUsersRefreshTimer?.cancel();
-    _activeUsersRefreshTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+    _activeUsersRefreshTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (mounted && isLocationEnabled) {
         await _loadActiveUsers();
       }
@@ -514,6 +682,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 title: userName,
                 snippet: 'Active helper nearby',
               ),
+              onTap: () {
+                // Show route when marker is tapped
+                _showRouteToDestination(lat, lon, 'user_$userId');
+              },
             ),
           );
         }
@@ -546,8 +718,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   snippet: '$userName needs help',
                 ),
                 onTap: () {
-                  // Show emergency dialog when red marker is tapped
-                  _showEmergencyAlertDialog(alert);
+                  // Show route first, then show dialog
+                  _showRouteToDestination(latitude, longitude, 'emergency_$requestId');
+                  // Also show emergency dialog
+                  Future.delayed(Duration(milliseconds: 500), () {
+                    _showEmergencyAlertDialog(alert);
+                  });
                 },
               ),
             );
@@ -756,6 +932,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           zoom: 15,
                                         ),
                                         markers: _buildMapMarkers(),
+                                        polylines: _polylines,
                                         myLocationEnabled: false, // We're using custom marker
                                         myLocationButtonEnabled: false,
                                         mapType: MapType.normal,
@@ -796,6 +973,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                           ),
                                         ),
                                       ),
+                                      // Clear route button (shown when route is displayed)
+                                      if (_polylines.isNotEmpty)
+                                        Positioned(
+                                          top: 10,
+                                          right: 10,
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius: BorderRadius.circular(20),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withOpacity(0.2),
+                                                  blurRadius: 8,
+                                                  spreadRadius: 2,
+                                                ),
+                                              ],
+                                            ),
+                                            child: IconButton(
+                                              icon: Icon(Icons.clear, color: Colors.red),
+                                              onPressed: _clearRoute,
+                                              tooltip: 'Clear route',
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),
