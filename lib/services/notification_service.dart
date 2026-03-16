@@ -207,21 +207,49 @@ class NotificationService {
   // Helper method to show dialog with context
   static void _showDialogWithContext(BuildContext context, Map<String, dynamic> data) {
     try {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => EmergencyNotificationDialog(
-          userName: data['userName'] ?? 'User',
-          userPhone: data['userPhone'] ?? '',
-          latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-          longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
-          description: data['description'] ?? 'Emergency SOS request',
-          requestId: data['userId'] ?? '',
-        ),
-      );
-      debugPrint('Dialog shown successfully');
+      // Use SchedulerBinding to ensure the dialog shows after the frame is built
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (context.mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => EmergencyNotificationDialog(
+              userName: data['userName'] ?? 'User',
+              userPhone: data['userPhone'] ?? '',
+              latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
+              longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
+              description: data['description'] ?? 'Emergency SOS request',
+              requestId: data['userId'] ?? '',
+            ),
+          );
+          debugPrint('Dialog shown successfully');
+        }
+      });
     } catch (e) {
       debugPrint('ERROR in _showDialogWithContext: $e');
+      // Retry after a delay
+      Future.delayed(const Duration(milliseconds: 500), () {
+        final retryContext = navigatorKey?.currentContext;
+        if (retryContext != null && retryContext.mounted) {
+          try {
+            showDialog(
+              context: retryContext,
+              barrierDismissible: false,
+              builder: (context) => EmergencyNotificationDialog(
+                userName: data['userName'] ?? 'User',
+                userPhone: data['userPhone'] ?? '',
+                latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
+                longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
+                description: data['description'] ?? 'Emergency SOS request',
+                requestId: data['userId'] ?? '',
+              ),
+            );
+            debugPrint('Dialog shown successfully on retry');
+          } catch (retryError) {
+            debugPrint('ERROR on retry: $retryError');
+          }
+        }
+      });
     }
   }
 
