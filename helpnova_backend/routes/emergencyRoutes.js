@@ -147,12 +147,23 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     }
 
     console.log(`📬 Total users to notify: ${usersToNotify.length}`);
+    console.log(`📊 Detailed breakdown:`);
+    console.log(`   - Total active users with location: ${allPotentialUsers.length}`);
+    console.log(`   - Active users after time filter: ${nearbyUsers.length}`);
+    console.log(`   - Users within ${maxDistance}km: ${usersToNotify.length}`);
+    
+    // Log each user's details
+    usersToNotify.forEach(user => {
+      const hasFcm = user.fcmToken && user.fcmToken.trim() !== '';
+      console.log(`   📍 ${user.name} (${user._id}): ${user.distance?.toFixed(2)}km away, FCM: ${hasFcm ? '✅' : '❌'}`);
+    });
 
     if (usersToNotify.length === 0) {
       console.log(`⚠️ No nearby helpers found. Reasons could be:`);
       console.log(`   - No users with location enabled`);
       console.log(`   - All users are more than ${maxDistance}km away`);
       console.log(`   - Users haven't updated location recently`);
+      console.log(`   - Sender location: ${latitude}, ${longitude}`);
       
       return res.status(200).json({
         success: true,
@@ -163,7 +174,8 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
           totalActiveUsers: allPotentialUsers.length,
           activeUsers: nearbyUsers.length,
           maxDistance: maxDistance,
-          timeWindow: "1 hour"
+          timeWindow: "1 hour",
+          senderLocation: { latitude, longitude }
         }
       });
     }
@@ -220,7 +232,11 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     
     const notificationPromises = usersWithFcmTokens.map(async (user) => {
       try {
-        console.log(`📲 Sending notification to ${user.name} (${user._id}) - Token: ${user.fcmToken ? user.fcmToken.substring(0, 20) + '...' : 'MISSING'}`);
+        const tokenPreview = user.fcmToken ? `${user.fcmToken.substring(0, 20)}...` : 'MISSING';
+        console.log(`📲 Sending notification to ${user.name} (${user._id})`);
+        console.log(`   Token: ${tokenPreview}`);
+        console.log(`   Distance: ${user.distance?.toFixed(2)}km`);
+        console.log(`   Payload: ${JSON.stringify(notificationPayload)}`);
         
         const result = await sendFCMNotification(
           user.fcmToken,
@@ -230,7 +246,8 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
         if (result.success) {
           successCount++;
-          console.log(`✅ Notification sent successfully to ${user.name}`);
+          console.log(`✅ Notification sent successfully to ${user.name} (${user._id})`);
+          console.log(`   FCM Response: ${JSON.stringify(result.response)}`);
           // Track notified user in the request
           savedRequest.notifiedUsers.push({
             userId: user._id,
@@ -239,12 +256,18 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
           return { success: true, userId: user._id, userName: user.name };
         } else {
           failCount++;
-          console.error(`❌ Failed to send notification to ${user.name} (${user._id}):`, result.error);
+          console.error(`❌ Failed to send notification to ${user.name} (${user._id})`);
+          console.error(`   Error: ${result.error}`);
+          console.error(`   Status: ${result.status || 'N/A'}`);
+          if (result.error && result.error.includes('invalid') || result.error.includes('not found')) {
+            console.error(`   ⚠️ FCM token may be invalid or expired. User needs to re-enable notifications.`);
+          }
           return { success: false, userId: user._id, userName: user.name, error: result.error };
         }
       } catch (error) {
         failCount++;
-        console.error(`❌ Error sending notification to ${user.name} (${user._id}):`, error.message);
+        console.error(`❌ Exception sending notification to ${user.name} (${user._id}):`, error.message);
+        console.error(`   Stack: ${error.stack}`);
         return { success: false, userId: user._id, userName: user.name, error: error.message };
       }
     });
@@ -262,9 +285,12 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
     // Step 4: Return response with request ID
     
-    res.status(200).json({
+    // Prepare detailed response
+    const response = {
       success: true,
-      message: `Emergency alert sent to ${successCount} nearby helpers`,
+      message: successCount > 0 
+        ? `Emergency alert sent to ${successCount} nearby helper${successCount > 1 ? 's' : ''}`
+        : `No helpers were notified. ${usersWithoutFcmCount > 0 ? `${usersWithoutFcmCount} helper${usersWithoutFcmCount > 1 ? 's' : ''} nearby but missing FCM tokens.` : 'No nearby helpers found.'}`,
       requestId: savedRequest._id.toString(),
       notifiedUsers: successCount,
       failedUsers: failCount,
@@ -276,9 +302,14 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
         nearbyUsersWithinDistance: usersToNotify.length,
         usersWithFcmTokens: usersWithFcmTokens.length,
         maxDistance: maxDistance,
-        timeWindow: "1 hour"
+        timeWindow: "1 hour",
+        senderLocation: { latitude, longitude }
       }
-    });
+    };
+    
+    console.log(`📤 Final response:`, JSON.stringify(response, null, 2));
+    
+    res.status(200).json(response);
   } catch (error) {
     console.error("Send emergency alert error:", error);
     res.status(500).json({

@@ -285,16 +285,24 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   // Ensure FCM token is saved to backend
   Future<void> _ensureFcmTokenSaved() async {
     try {
+      debugPrint('[HomeScreen] 🔔 Ensuring FCM token is saved to backend...');
+      // Always verify and save token when location is enabled
+      // This ensures helpers can receive emergency alerts
+      await NotificationService.verifyToken();
+      
+      // Wait a bit and verify again to ensure it's saved
+      await Future.delayed(const Duration(seconds: 1));
       final fcmToken = NotificationService.getToken();
       if (fcmToken != null) {
-        // Token will be saved automatically by NotificationService, but we can verify
-        debugPrint('[HomeScreen] FCM token available: ${fcmToken.substring(0, 20)}...');
-        // Verify and save token to ensure it's in backend
+        debugPrint('[HomeScreen] ✅ FCM token verified: ${fcmToken.substring(0, 20)}...');
+        // Try saving again to be absolutely sure
         await NotificationService.verifyToken();
       } else {
-        debugPrint('[HomeScreen] ⚠️ FCM token not available yet');
-        // Try to get token again
-        await NotificationService.verifyToken();
+        debugPrint('[HomeScreen] ⚠️ FCM token still not available after verification');
+        // Retry after a delay
+        Future.delayed(const Duration(seconds: 2), () async {
+          await NotificationService.verifyToken();
+        });
       }
     } catch (e) {
       debugPrint('[HomeScreen] Error checking FCM token: $e');

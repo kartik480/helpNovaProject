@@ -125,20 +125,39 @@ async function sendFCMNotification(fcmToken, notification, data) {
       response: response.data,
     };
   } catch (error) {
-    console.error('Error sending FCM notification:', error.message);
+    console.error('❌ Error sending FCM notification:', error.message);
+    console.error('   Token (first 20 chars):', fcmToken ? fcmToken.substring(0, 20) : 'MISSING');
     
     if (error.response) {
-      console.error('FCM API Error:', error.response.data);
+      const errorData = error.response.data;
+      console.error('   FCM API Error Response:', JSON.stringify(errorData, null, 2));
+      console.error('   HTTP Status:', error.response.status);
+      
+      // Check for specific error types
+      if (error.response.status === 404) {
+        console.error('   ⚠️ FCM token not found or invalid. User needs to re-enable notifications.');
+      } else if (error.response.status === 403) {
+        console.error('   ⚠️ FCM authentication failed. Check Firebase service account configuration.');
+      } else if (error.response.status === 400) {
+        console.error('   ⚠️ Invalid FCM request. Check token format and payload.');
+      }
+      
       return {
         success: false,
-        error: error.response.data.error?.message || error.message,
+        error: errorData.error?.message || error.message,
         status: error.response.status,
+        details: errorData,
       };
+    }
+    
+    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+      console.error('   ⚠️ Network error. Firebase service may be unavailable.');
     }
 
     return {
       success: false,
       error: error.message,
+      code: error.code,
     };
   }
 }

@@ -220,13 +220,32 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
 
         if (result['success'] == true) {
           final notifiedUsers = result['notifiedUsers'] ?? 0;
+          final totalNearbyUsers = result['totalNearbyUsers'] ?? 0;
+          final usersWithoutFcm = result['usersWithoutFcmTokens'] ?? 0;
+          
+          String message;
+          Color backgroundColor;
+          
+          if (notifiedUsers > 0) {
+            message = 'Emergency alert sent successfully! $notifiedUsers nearby helper${notifiedUsers > 1 ? 's' : ''} notified.';
+            backgroundColor = Colors.green;
+          } else if (totalNearbyUsers > 0) {
+            if (usersWithoutFcm > 0) {
+              message = '⚠️ $totalNearbyUsers helper${totalNearbyUsers > 1 ? 's' : ''} nearby, but ${usersWithoutFcm} don\'t have notifications enabled. They need to enable notifications in the app.';
+            } else {
+              message = '⚠️ No helpers were notified. Check backend logs for details.';
+            }
+            backgroundColor = Colors.orange;
+          } else {
+            message = '⚠️ No nearby helpers found. Make sure helpers have location enabled and are within 10km.';
+            backgroundColor = Colors.orange;
+          }
+          
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Emergency alert sent successfully! $notifiedUsers nearby helpers notified.',
-              ),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 3),
+              content: Text(message),
+              backgroundColor: backgroundColor,
+              duration: Duration(seconds: 5),
             ),
           );
           
@@ -241,7 +260,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             SnackBar(
               content: Text(result['message'] ?? 'Failed to send emergency alert'),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 3),
+              duration: Duration(seconds: 5),
             ),
           );
         }
