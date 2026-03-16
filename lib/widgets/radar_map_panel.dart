@@ -248,6 +248,10 @@ class _RadarMapPanelState extends State<RadarMapPanel> {
           mapType: MapType.normal,
           zoomControlsEnabled: true,
           compassEnabled: true,
+          zoomGesturesEnabled: true, // Enable pinch-to-zoom
+          scrollGesturesEnabled: true, // Enable pan/scroll gestures
+          tiltGesturesEnabled: true, // Enable tilt gestures
+          rotateGesturesEnabled: true, // Enable rotation gestures
         ),
       ),
     );

@@ -26,8 +26,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   List<Map<String, dynamic>> acceptedHelpers = [];
   List<Map<String, dynamic>> helperLocations = []; // Real-time helper locations
   List<Map<String, dynamic>> activeUsers = []; // All active users with location enabled
-  List<Map<String, dynamic>> nearbyActiveUsers = []; // Filtered active users within 10km (using Google Maps API)
-  int nearbyHelpersCount = 0; // Count of nearby helpers within 10km
+  List<Map<String, dynamic>> nearbyActiveUsers = []; // Filtered active users within 2000km (using Google Maps API)
+  int nearbyHelpersCount = 0; // Count of nearby helpers within 2000km
   bool isLoadingNearbyHelpers = false;
   Map<String, dynamic>? requestInfo;
   Timer? _helperLocationTimer;
@@ -50,7 +50,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
 
-  // Filter helpers within 10km radius using Google Maps Distance Matrix API (batch processing)
+  // Filter helpers within 2000km radius using Google Maps Distance Matrix API (batch processing)
   Future<List<Map<String, dynamic>>> _getNearbyHelpers(List<Map<String, dynamic>> helpers, double radiusKm) async {
     if (userLatitude == null || userLongitude == null || helpers.isEmpty) {
       return [];
@@ -103,13 +103,13 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     }
   }
 
-  // Get count of nearby helpers (within 10km) using Google Maps Distance Matrix API (batch processing)
+  // Get count of nearby helpers (within 2000km) using Google Maps Distance Matrix API (batch processing)
   Future<int> _getNearbyHelpersCount() async {
     if (userLatitude == null || userLongitude == null) {
       return 0;
     }
     
-    const double radiusKm = 10.0;
+    const double radiusKm = 2000.0;
     
     // Combine all helpers (helperLocations + activeUsers) avoiding duplicates
     List<Map<String, dynamic>> allHelpers = [];
@@ -251,9 +251,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     });
 
     try {
-      // Filter active users within 10km using Google Maps Distance Matrix API
+      // Filter active users within 2000km using Google Maps Distance Matrix API
       // This uses accurate road distances instead of straight-line distance
-      final filtered = await _getNearbyHelpers(activeUsers, 10.0);
+      final filtered = await _getNearbyHelpers(activeUsers, 2000.0);
       final count = await _getNearbyHelpersCount();
       
       if (mounted) {
@@ -263,7 +263,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           isLoadingNearbyHelpers = false;
         });
         
-        print('[EmergencySOS] Found $count nearby helpers within 10km using Google Maps Distance Matrix API (road distance)');
+        print('[EmergencySOS] Found $count nearby helpers within 2000km using Google Maps Distance Matrix API (road distance)');
       }
     } catch (e) {
       print('Error updating nearby helpers: $e');
@@ -375,11 +375,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             final nearbyCount = debug?['nearbyUsersWithinDistance'] ?? 0;
             
             if (totalActive > 0 && nearbyCount == 0) {
-              message = '⚠️ Found $totalActive active helper${totalActive > 1 ? 's' : ''}, but none within 10km. Try increasing the search radius or wait for helpers to come closer.';
+              message = '⚠️ Found $totalActive active helper${totalActive > 1 ? 's' : ''}, but none within 2000km. Try increasing the search radius or wait for helpers to come closer.';
             } else if (nearbyCount > 0) {
               message = '⚠️ Found $nearbyCount nearby helper${nearbyCount > 1 ? 's' : ''}, but they don\'t have notifications enabled. Ask them to enable notifications in the app.';
             } else {
-              message = '⚠️ No nearby helpers found. Make sure helpers have location enabled and are within 10km.';
+              message = '⚠️ No nearby helpers found. Make sure helpers have location enabled and are within 2000km.';
             }
             backgroundColor = Colors.orange;
           }
@@ -726,7 +726,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   userLongitude: userLongitude!,
                   helpers: acceptedHelpers,
                   helperLocations: helperLocations,
-                  activeUsers: nearbyActiveUsers, // Only show helpers within 10km (filtered using Google Maps API)
+                  activeUsers: nearbyActiveUsers, // Only show helpers within 2000km (filtered using Google Maps API)
                 ),
                 // Display coordinates under the map
                 Container(
@@ -753,7 +753,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     ],
                   ),
                 ),
-                // Display helper count - show accepted helpers and nearby active users (within 10km)
+                // Display helper count - show accepted helpers and nearby active users (within 2000km)
                 if (isLoadingNearbyHelpers)
                   Container(
                     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -792,7 +792,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         Icon(Icons.people, color: Colors.green.shade700, size: 16),
                         SizedBox(width: 8),
                         Text(
-                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | $nearbyHelpersCount Nearby Helper${nearbyHelpersCount != 1 ? 's' : ''} Within 10km (Road Distance)',
+                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | $nearbyHelpersCount Nearby Helper${nearbyHelpersCount != 1 ? 's' : ''} Within 2000km (Road Distance)',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green.shade900,
@@ -959,7 +959,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              'No nearby helpers found. Make sure helpers have location enabled and are within 10km.',
+              'No nearby helpers found. Make sure helpers have location enabled and are within 2000km.',
               style: TextStyle(
                 fontSize: 13,
                 color: Colors.orange.shade900,
