@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import 'widgets/radar_map_panel.dart';
 import 'widgets/map_search_widget.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
-import 'services/geocoding_service.dart';
 import 'utils/responsive.dart';
 
 class EmergencySosScreen extends StatefulWidget {
@@ -50,19 +50,35 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
 
-  // Filter helpers within 2000km radius using Google Maps Distance Matrix API (batch processing)
+  // Calculate straight-line distance between two coordinates (Haversine formula)
+  double _calculateStraightLineDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // Earth's radius in kilometers
+    final double dLat = _degreesToRadians(lat2 - lat1);
+    final double dLon = _degreesToRadians(lon2 - lon1);
+    
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(lat1)) * math.cos(_degreesToRadians(lat2)) *
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    final double c = 2 * math.asin(math.sqrt(a));
+    
+    return earthRadius * c;
+  }
+  
+  double _degreesToRadians(double degrees) {
+    return degrees * (math.pi / 180);
+  }
+
+  // Filter helpers within 2000km radius using fast straight-line distance calculation
   Future<List<Map<String, dynamic>>> _getNearbyHelpers(List<Map<String, dynamic>> helpers, double radiusKm) async {
     if (userLatitude == null || userLongitude == null || helpers.isEmpty) {
       return [];
     }
     
-    // Prepare destinations list for batch API call
-    List<Map<String, double>> destinations = [];
-    List<Map<String, dynamic>> validHelpers = [];
+    List<Map<String, dynamic>> nearbyHelpers = [];
     
     for (var helper in helpers) {
-      final lat = helper['latitude'];
-      final lng = helper['longitude'];
+      final lat = helper['latitude'] ?? helper['location']?['latitude'];
+      final lng = helper['longitude'] ?? helper['location']?['longitude'];
       
       if (lat == null || lng == null) continue;
       
@@ -71,39 +87,24 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       
       if (latitude == null || longitude == null) continue;
       
-      destinations.add({'lat': latitude, 'lng': longitude});
-      validHelpers.add(helper);
-    }
-    
-    if (destinations.isEmpty) return [];
-    
-    try {
-      // Use batch Distance Matrix API for efficient processing
-      final distances = await GeocodingService.getBatchRoadDistances(
+      // Use fast straight-line distance calculation
+      final distance = _calculateStraightLineDistance(
         userLatitude!,
         userLongitude!,
-        destinations,
+        latitude,
+        longitude,
       );
       
-      List<Map<String, dynamic>> nearbyHelpers = [];
-      
-      // Filter helpers based on road distances
-      for (int i = 0; i < validHelpers.length; i++) {
-        final distance = distances[i];
-        if (distance != null && distance <= radiusKm) {
-          nearbyHelpers.add(validHelpers[i]);
-        }
+      if (distance <= radiusKm) {
+        nearbyHelpers.add(helper);
       }
-      
-      print('[EmergencySOS] Filtered ${nearbyHelpers.length} nearby helpers using Google Maps Distance Matrix API (road distance)');
-      return nearbyHelpers;
-    } catch (e) {
-      print('Error in batch distance calculation: $e');
-      return [];
     }
+    
+    print('[EmergencySOS] Filtered ${nearbyHelpers.length} nearby helpers within ${radiusKm}km using straight-line distance');
+    return nearbyHelpers;
   }
 
-  // Get count of nearby helpers (within 2000km) using Google Maps Distance Matrix API (batch processing)
+  // Get count of nearby helpers (within 2000km) using fast straight-line distance
   Future<int> _getNearbyHelpersCount() async {
     if (userLatitude == null || userLongitude == null) {
       return 0;
@@ -135,13 +136,12 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     
     if (allHelpers.isEmpty) return 0;
     
-    // Prepare destinations list for batch API call
-    List<Map<String, double>> destinations = [];
-    List<Map<String, dynamic>> validHelpers = [];
+    int count = 0;
     
+    // Count helpers within radius using fast straight-line distance
     for (var helper in allHelpers) {
-      final lat = helper['latitude'];
-      final lng = helper['longitude'];
+      final lat = helper['latitude'] ?? helper['location']?['latitude'];
+      final lng = helper['longitude'] ?? helper['location']?['longitude'];
       
       if (lat == null || lng == null) continue;
       
@@ -150,36 +150,20 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       
       if (latitude == null || longitude == null) continue;
       
-      destinations.add({'lat': latitude, 'lng': longitude});
-      validHelpers.add(helper);
-    }
-    
-    if (destinations.isEmpty) return 0;
-    
-    try {
-      // Use batch Distance Matrix API for efficient processing
-      final distances = await GeocodingService.getBatchRoadDistances(
+      final distance = _calculateStraightLineDistance(
         userLatitude!,
         userLongitude!,
-        destinations,
+        latitude,
+        longitude,
       );
       
-      int count = 0;
-      
-      // Count helpers within radius based on road distances
-      for (int i = 0; i < validHelpers.length; i++) {
-        final distance = distances[i];
-        if (distance != null && distance <= radiusKm) {
-          count++;
-        }
+      if (distance <= radiusKm) {
+        count++;
       }
-      
-      print('[EmergencySOS] Found $count nearby helpers within ${radiusKm}km using Google Maps Distance Matrix API (road distance)');
-      return count;
-    } catch (e) {
-      print('Error in batch distance calculation for count: $e');
-      return 0;
     }
+    
+    print('[EmergencySOS] Found $count nearby helpers within ${radiusKm}km using straight-line distance');
+    return count;
   }
 
 
@@ -251,8 +235,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     });
 
     try {
-      // Filter active users within 2000km using Google Maps Distance Matrix API
-      // This uses accurate road distances instead of straight-line distance
+      // Filter active users within 2000km using fast straight-line distance calculation
       final filtered = await _getNearbyHelpers(activeUsers, 2000.0);
       final count = await _getNearbyHelpersCount();
       
@@ -263,7 +246,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           isLoadingNearbyHelpers = false;
         });
         
-        print('[EmergencySOS] Found $count nearby helpers within 2000km using Google Maps Distance Matrix API (road distance)');
+        print('[EmergencySOS] Found $count nearby helpers within 2000km using straight-line distance');
       }
     } catch (e) {
       print('Error updating nearby helpers: $e');
@@ -392,12 +375,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             ),
           );
           
-          // Refresh accepted helpers and locations after a short delay
-          Future.delayed(Duration(seconds: 2), () {
-            _loadAcceptedHelpers();
-            _loadHelperLocations();
-            _loadActiveUsers();
-          });
+          // Refresh accepted helpers, locations, and nearby count immediately
+          _loadAcceptedHelpers();
+          _loadHelperLocations();
+          _loadActiveUsers();
+          _updateNearbyHelpers(); // Update count immediately
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -792,7 +774,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         Icon(Icons.people, color: Colors.green.shade700, size: 16),
                         SizedBox(width: 8),
                         Text(
-                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | $nearbyHelpersCount Nearby Helper${nearbyHelpersCount != 1 ? 's' : ''} Within 2000km (Road Distance)',
+                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | $nearbyHelpersCount Nearby Helper${nearbyHelpersCount != 1 ? 's' : ''} Within 2000km',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green.shade900,
@@ -938,9 +920,11 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   }
 
   Widget _buildBottomWarningBar() {
-    // Use the state variable that's updated with Google Maps API calculations
-    if (nearbyHelpersCount > 0) {
-      // Don't show warning if there are nearby helpers
+    // Check if there are any helpers visible on the map (accepted helpers or active users)
+    final hasVisibleHelpers = helperLocations.isNotEmpty || activeUsers.isNotEmpty || nearbyHelpersCount > 0;
+    
+    if (hasVisibleHelpers) {
+      // Don't show warning if there are helpers visible
       return SizedBox.shrink();
     }
     
