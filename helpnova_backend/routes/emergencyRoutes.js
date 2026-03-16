@@ -71,21 +71,47 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     console.log(`✅ SOS Request saved to database: ${savedRequest._id}`);
 
     // Step 2: Find nearby users (within 5km radius) who have FCM tokens and are active
-    // Only include users with location updated within the last 5 minutes (active users)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000); // 5 minutes ago
+    // Include users with location updated within the last 1 hour (active users)
+    // Also include users who just enabled location (lastUpdated might be null or very recent)
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
     
-    const nearbyUsers = await User.find({
+    console.log(`🔍 Searching for nearby helpers...`);
+    console.log(`📍 Sender location: ${latitude}, ${longitude}`);
+    console.log(`⏰ Looking for users active within last 1 hour`);
+    
+    // First, find ALL users with FCM tokens and location enabled (more lenient)
+    const allPotentialUsers = await User.find({
       _id: { $ne: req.userId }, // Exclude the sender
       fcmToken: { $ne: null, $exists: true }, // Only users with FCM tokens
       locationAllowed: true, // Only users who allow location sharing
       'location.latitude': { $ne: null, $exists: true }, // Only users with location data
       'location.longitude': { $ne: null, $exists: true },
-      'location.lastUpdated': { $gte: fiveMinutesAgo }, // Only users with recent location updates (active)
     });
 
-    // Filter users by distance (within 5km)
+    console.log(`👥 Found ${allPotentialUsers.length} total users with FCM tokens and location enabled`);
+
+    // Filter by time window (but be lenient - include if lastUpdated is null or recent)
+    const nearbyUsers = allPotentialUsers.filter(user => {
+      if (!user.location || !user.location.lastUpdated) {
+        // Include users without lastUpdated (just enabled location)
+        console.log(`✅ Including ${user.name} - location just enabled (no lastUpdated)`);
+        return true;
+      }
+      const lastUpdated = new Date(user.location.lastUpdated);
+      const isRecent = lastUpdated >= oneHourAgo;
+      if (isRecent) {
+        console.log(`✅ Including ${user.name} - location updated ${Math.round((Date.now() - lastUpdated.getTime()) / 60000)} minutes ago`);
+      } else {
+        console.log(`⚠️ Excluding ${user.name} - location updated ${Math.round((Date.now() - lastUpdated.getTime()) / 60000)} minutes ago (too old)`);
+      }
+      return isRecent;
+    });
+
+    console.log(`👥 After time filter: ${nearbyUsers.length} active users`);
+
+    // Filter users by distance (within 10km - increased for better coverage)
     const usersToNotify = [];
-    const maxDistance = 5; // 5km radius
+    const maxDistance = 10; // 10km radius (increased from 5km for better coverage)
 
     for (const user of nearbyUsers) {
       // Check if user has valid location data
@@ -98,21 +124,43 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
           user.location.longitude
         );
 
+        console.log(`📏 User ${user.name} (${user._id}): Distance = ${distance.toFixed(2)}km, FCM Token: ${user.fcmToken ? 'Yes' : 'No'}, Last Updated: ${user.location.lastUpdated || 'Never'}`);
+
         // Only include users within 5km radius
         if (distance <= maxDistance) {
           usersToNotify.push({
             ...user.toObject(),
             distance: distance // Add distance for reference
           });
+          console.log(`✅ Added ${user.name} to notification list (${distance.toFixed(2)}km away)`);
+        } else {
+          console.log(`❌ ${user.name} is too far (${distance.toFixed(2)}km > ${maxDistance}km)`);
         }
+      } else {
+        console.log(`⚠️ User ${user.name} has invalid location data`);
       }
     }
 
+    console.log(`📬 Total users to notify: ${usersToNotify.length}`);
+
     if (usersToNotify.length === 0) {
+      console.log(`⚠️ No nearby helpers found. Reasons could be:`);
+      console.log(`   - No users with FCM tokens`);
+      console.log(`   - No users with location enabled`);
+      console.log(`   - All users are more than ${maxDistance}km away`);
+      console.log(`   - Users haven't updated location recently`);
+      
       return res.status(200).json({
         success: true,
         message: "No nearby helpers found with notification enabled",
         notifiedUsers: 0,
+        requestId: savedRequest._id.toString(),
+        debug: {
+          totalUsersWithFcm: allPotentialUsers.length,
+          activeUsers: nearbyUsers.length,
+          maxDistance: maxDistance,
+          timeWindow: "1 hour"
+        }
       });
     }
 
@@ -148,8 +196,12 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     let failCount = 0;
 
     // Step 3: Send notifications to nearby users and track who was notified
+    console.log(`📤 Sending notifications to ${usersToNotify.length} users...`);
+    
     const notificationPromises = usersToNotify.map(async (user) => {
       try {
+        console.log(`📲 Sending notification to ${user.name} (${user._id}) - Token: ${user.fcmToken ? user.fcmToken.substring(0, 20) + '...' : 'MISSING'}`);
+        
         const result = await sendFCMNotification(
           user.fcmToken,
           notificationPayload,
@@ -158,21 +210,22 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
         if (result.success) {
           successCount++;
+          console.log(`✅ Notification sent successfully to ${user.name}`);
           // Track notified user in the request
           savedRequest.notifiedUsers.push({
             userId: user._id,
             notifiedAt: new Date()
           });
-          return { success: true, userId: user._id };
+          return { success: true, userId: user._id, userName: user.name };
         } else {
           failCount++;
-          console.error(`Failed to send notification to user ${user._id}:`, result.error);
-          return { success: false, userId: user._id, error: result.error };
+          console.error(`❌ Failed to send notification to ${user.name} (${user._id}):`, result.error);
+          return { success: false, userId: user._id, userName: user.name, error: result.error };
         }
       } catch (error) {
         failCount++;
-        console.error(`Error sending notification to user ${user._id}:`, error.message);
-        return { success: false, userId: user._id, error: error.message };
+        console.error(`❌ Error sending notification to ${user.name} (${user._id}):`, error.message);
+        return { success: false, userId: user._id, userName: user.name, error: error.message };
       }
     });
 
@@ -180,6 +233,11 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
     // Save the updated request with notified users
     await savedRequest.save();
+
+    console.log(`✅ Emergency alert completed:`);
+    console.log(`   - Successfully notified: ${successCount} users`);
+    console.log(`   - Failed notifications: ${failCount} users`);
+    console.log(`   - Total users found: ${usersToNotify.length}`);
 
     // Step 4: Return response with request ID
     res.status(200).json({
@@ -310,6 +368,81 @@ router.get("/request/:requestId/helpers", authenticateToken, async (req, res) =>
       message: "Server error. Please try again later.",
       success: false,
       error: error.message,
+    });
+  }
+});
+
+// Test endpoint to check Firebase Service Account configuration
+router.get("/test-fcm-config", authenticateToken, async (req, res) => {
+  try {
+    const { getAccessToken, getProjectId } = require("../utils/fcmV1Service");
+    
+    // Check if environment variable is set
+    const hasServiceAccount = !!process.env.FIREBASE_SERVICE_ACCOUNT;
+    
+    if (!hasServiceAccount) {
+      return res.status(500).json({
+        success: false,
+        message: "❌ FIREBASE_SERVICE_ACCOUNT environment variable is NOT set",
+        configured: false,
+        instructions: {
+          step1: "Go to Firebase Console: https://console.firebase.google.com/",
+          step2: "Select your project → Project Settings → Service Accounts",
+          step3: "Click 'Generate new private key' and download the JSON file",
+          step4: "Save the JSON content to helpnova_backend/.env as: FIREBASE_SERVICE_ACCOUNT={your-json-here}",
+          step5: "Or use the setup script: node helpnova_backend/setup-env.js"
+        }
+      });
+    }
+
+    // Try to parse and get project ID
+    let projectId = null;
+    let isValid = false;
+    let errorMessage = null;
+    
+    try {
+      projectId = getProjectId();
+      isValid = true;
+    } catch (error) {
+      isValid = false;
+      errorMessage = error.message;
+    }
+
+    // Try to get access token (this will verify the credentials work)
+    let tokenWorks = false;
+    let tokenError = null;
+    
+    if (isValid) {
+      try {
+        await getAccessToken();
+        tokenWorks = true;
+      } catch (error) {
+        tokenWorks = false;
+        tokenError = error.message;
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      configured: hasServiceAccount,
+      isValid: isValid,
+      tokenWorks: tokenWorks,
+      projectId: projectId || "Unable to get project ID",
+      status: tokenWorks ? "✅ FCM is properly configured and working!" : "⚠️ FCM is configured but has issues",
+      errors: {
+        parsing: errorMessage,
+        token: tokenError
+      },
+      message: tokenWorks 
+        ? "Firebase Service Account is properly configured and ready to send notifications!"
+        : "Firebase Service Account is set but there are issues. Check the errors above."
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error checking FCM configuration",
+      error: error.message
     });
   }
 });

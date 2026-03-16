@@ -18,6 +18,7 @@ import 'fire_emergency_screen.dart';
 import 'utils/responsive.dart';
 import 'request_detail_screen.dart';
 import 'widgets/emergency_notification_dialog.dart';
+import 'services/notification_service.dart';
 
 class HomeScreen extends StatefulWidget{
   const HomeScreen({super.key});
@@ -230,6 +231,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Update user location in backend for emergency notifications
       _updateUserLocationInBackend(position.latitude, position.longitude);
 
+      // Ensure FCM token is saved when location is enabled (for receiving alerts)
+      _ensureFcmTokenSaved();
+
       // Start periodic location updates (every 2 minutes) to keep green marker active
       _startPeriodicLocationUpdates();
 
@@ -250,6 +254,25 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (e) {
       // Silently fail - location update is not critical for app functionality
       print('[HomeScreen] Failed to update location in backend: $e');
+    }
+  }
+
+  // Ensure FCM token is saved to backend
+  Future<void> _ensureFcmTokenSaved() async {
+    try {
+      final fcmToken = NotificationService.getToken();
+      if (fcmToken != null) {
+        // Token will be saved automatically by NotificationService, but we can verify
+        debugPrint('[HomeScreen] FCM token available: ${fcmToken.substring(0, 20)}...');
+        // Verify and save token to ensure it's in backend
+        await NotificationService.verifyToken();
+      } else {
+        debugPrint('[HomeScreen] ⚠️ FCM token not available yet');
+        // Try to get token again
+        await NotificationService.verifyToken();
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Error checking FCM token: $e');
     }
   }
 
