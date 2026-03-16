@@ -70,7 +70,7 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     const savedRequest = await emergencyRequest.save();
     console.log(`✅ SOS Request saved to database: ${savedRequest._id}`);
 
-    // Step 2: Find nearby users (within 5km radius) who have FCM tokens and are active
+    // Step 2: Find nearby users (within 10km radius) who are active
     // Include users with location updated within the last 1 hour (active users)
     // Also include users who just enabled location (lastUpdated might be null or very recent)
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
@@ -79,16 +79,16 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     console.log(`📍 Sender location: ${latitude}, ${longitude}`);
     console.log(`⏰ Looking for users active within last 1 hour`);
     
-    // First, find ALL users with FCM tokens and location enabled (more lenient)
+    // First, find ALL active users with location enabled (like active-users endpoint)
+    // We'll check for FCM tokens later when sending notifications
     const allPotentialUsers = await User.find({
       _id: { $ne: req.userId }, // Exclude the sender
-      fcmToken: { $ne: null, $exists: true }, // Only users with FCM tokens
       locationAllowed: true, // Only users who allow location sharing
       'location.latitude': { $ne: null, $exists: true }, // Only users with location data
       'location.longitude': { $ne: null, $exists: true },
     });
 
-    console.log(`👥 Found ${allPotentialUsers.length} total users with FCM tokens and location enabled`);
+    console.log(`👥 Found ${allPotentialUsers.length} total active users with location enabled`);
 
     // Filter by time window (but be lenient - include if lastUpdated is null or recent)
     const nearbyUsers = allPotentialUsers.filter(user => {
@@ -124,15 +124,20 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
           user.location.longitude
         );
 
-        console.log(`📏 User ${user.name} (${user._id}): Distance = ${distance.toFixed(2)}km, FCM Token: ${user.fcmToken ? 'Yes' : 'No'}, Last Updated: ${user.location.lastUpdated || 'Never'}`);
+        const hasFcmToken = user.fcmToken && user.fcmToken.trim() !== '';
+        console.log(`📏 User ${user.name} (${user._id}): Distance = ${distance.toFixed(2)}km, FCM Token: ${hasFcmToken ? 'Yes' : 'No'}, Last Updated: ${user.location.lastUpdated || 'Never'}`);
 
-        // Only include users within 5km radius
+        // Include users within maxDistance radius (we'll filter by FCM token when sending)
         if (distance <= maxDistance) {
           usersToNotify.push({
             ...user.toObject(),
             distance: distance // Add distance for reference
           });
-          console.log(`✅ Added ${user.name} to notification list (${distance.toFixed(2)}km away)`);
+          if (hasFcmToken) {
+            console.log(`✅ Added ${user.name} to notification list (${distance.toFixed(2)}km away, has FCM token)`);
+          } else {
+            console.log(`⚠️ Added ${user.name} to notification list (${distance.toFixed(2)}km away, but NO FCM token - will skip notification)`);
+          }
         } else {
           console.log(`❌ ${user.name} is too far (${distance.toFixed(2)}km > ${maxDistance}km)`);
         }
@@ -145,18 +150,17 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
     if (usersToNotify.length === 0) {
       console.log(`⚠️ No nearby helpers found. Reasons could be:`);
-      console.log(`   - No users with FCM tokens`);
       console.log(`   - No users with location enabled`);
       console.log(`   - All users are more than ${maxDistance}km away`);
       console.log(`   - Users haven't updated location recently`);
       
       return res.status(200).json({
         success: true,
-        message: "No nearby helpers found with notification enabled",
+        message: "No nearby helpers found",
         notifiedUsers: 0,
         requestId: savedRequest._id.toString(),
         debug: {
-          totalUsersWithFcm: allPotentialUsers.length,
+          totalActiveUsers: allPotentialUsers.length,
           activeUsers: nearbyUsers.length,
           maxDistance: maxDistance,
           timeWindow: "1 hour"
@@ -196,9 +200,25 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     let failCount = 0;
 
     // Step 3: Send notifications to nearby users and track who was notified
-    console.log(`📤 Sending notifications to ${usersToNotify.length} users...`);
+    // Filter out users without FCM tokens before sending
+    const usersWithFcmTokens = usersToNotify.filter(user => {
+      const hasToken = user.fcmToken && user.fcmToken.trim() !== '';
+      if (!hasToken) {
+        console.log(`⚠️ Skipping ${user.name} (${user._id}) - No FCM token registered. They need to enable notifications in the app.`);
+      }
+      return hasToken;
+    });
+
+    const usersWithoutFcmCount = usersToNotify.length - usersWithFcmTokens.length;
     
-    const notificationPromises = usersToNotify.map(async (user) => {
+    if (usersWithoutFcmCount > 0) {
+      console.log(`⚠️ Warning: ${usersWithoutFcmCount} nearby helpers don't have FCM tokens and won't receive notifications.`);
+      console.log(`   They need to enable notifications in the app to receive emergency alerts.`);
+    }
+    
+    console.log(`📤 Sending notifications to ${usersWithFcmTokens.length} users (${usersWithoutFcmCount} users skipped due to missing FCM tokens)...`);
+    
+    const notificationPromises = usersWithFcmTokens.map(async (user) => {
       try {
         console.log(`📲 Sending notification to ${user.name} (${user._id}) - Token: ${user.fcmToken ? user.fcmToken.substring(0, 20) + '...' : 'MISSING'}`);
         
@@ -233,20 +253,31 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
     // Save the updated request with notified users
     await savedRequest.save();
-
+    
     console.log(`✅ Emergency alert completed:`);
     console.log(`   - Successfully notified: ${successCount} users`);
     console.log(`   - Failed notifications: ${failCount} users`);
-    console.log(`   - Total users found: ${usersToNotify.length}`);
+    console.log(`   - Total nearby users: ${usersToNotify.length}`);
+    console.log(`   - Users without FCM tokens (skipped): ${usersWithoutFcmCount}`);
 
     // Step 4: Return response with request ID
+    
     res.status(200).json({
       success: true,
       message: `Emergency alert sent to ${successCount} nearby helpers`,
       requestId: savedRequest._id.toString(),
       notifiedUsers: successCount,
       failedUsers: failCount,
-      totalUsers: usersToNotify.length,
+      totalNearbyUsers: usersToNotify.length,
+      usersWithoutFcmTokens: usersWithoutFcmCount,
+      debug: {
+        totalActiveUsers: allPotentialUsers.length,
+        activeUsersAfterTimeFilter: nearbyUsers.length,
+        nearbyUsersWithinDistance: usersToNotify.length,
+        usersWithFcmTokens: usersWithFcmTokens.length,
+        maxDistance: maxDistance,
+        timeWindow: "1 hour"
+      }
     });
   } catch (error) {
     console.error("Send emergency alert error:", error);
