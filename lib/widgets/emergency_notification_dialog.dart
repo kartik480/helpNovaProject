@@ -29,20 +29,32 @@ class EmergencyNotificationDialog extends StatelessWidget {
     );
 
     try {
-      // For now, we'll create a generic emergency request acceptance
-      // You may need to adjust this based on your actual request acceptance API
-      await Future.delayed(const Duration(seconds: 1)); // Simulate API call
+      // Call the API to accept the emergency request
+      final result = await ApiService.acceptEmergencyRequest(requestId);
       
       if (context.mounted) {
         Navigator.pop(context); // Close loading
-        Navigator.pop(context); // Close notification dialog
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Request accepted! You will be contacted soon.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+        if (result['success'] == true) {
+          Navigator.pop(context); // Close notification dialog
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Request accepted! You will be contacted soon.'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        } else {
+          // Don't close dialog on error, let user try again
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(result['message'] ?? 'Error accepting request'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) {
@@ -51,6 +63,7 @@ class EmergencyNotificationDialog extends StatelessWidget {
           SnackBar(
             content: Text('Error accepting request: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
       }

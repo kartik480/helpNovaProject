@@ -1,5 +1,6 @@
 const express = require("express");
 const User = require("../models/User");
+const EmergencyRequest = require("../models/EmergencyRequest");
 const jwt = require("jsonwebtoken");
 const { calculateDistance } = require("../utils/distanceCalculator");
 const { sendFCMNotification } = require("../utils/fcmV1Service");
@@ -51,7 +52,25 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
       });
     }
 
-    // Find nearby users (within 5km radius) who have FCM tokens
+    // Step 1: Save SOS request to database (Firestore equivalent in MongoDB)
+    const emergencyRequest = new EmergencyRequest({
+      userId: sender._id,
+      userName: sender.name,
+      userPhone: sender.phone,
+      type: "emergency_sos",
+      location: {
+        latitude: latitude,
+        longitude: longitude,
+        address: null // Can be populated later with geocoding
+      },
+      description: description || "Emergency SOS request",
+      status: "active"
+    });
+
+    const savedRequest = await emergencyRequest.save();
+    console.log(`✅ SOS Request saved to database: ${savedRequest._id}`);
+
+    // Step 2: Find nearby users (within 5km radius) who have FCM tokens
     const nearbyUsers = await User.find({
       _id: { $ne: req.userId }, // Exclude the sender
       fcmToken: { $ne: null, $exists: true }, // Only users with FCM tokens
@@ -110,6 +129,7 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
     const dataPayload = {
       type: "emergency_sos",
+      requestId: savedRequest._id.toString(), // Include request ID for reference
       userId: sender._id.toString(),
       userName: sender.name,
       userPhone: sender.phone,
@@ -123,6 +143,7 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     let successCount = 0;
     let failCount = 0;
 
+    // Step 3: Send notifications to nearby users and track who was notified
     const notificationPromises = usersToNotify.map(async (user) => {
       try {
         const result = await sendFCMNotification(
@@ -133,6 +154,11 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
         if (result.success) {
           successCount++;
+          // Track notified user in the request
+          savedRequest.notifiedUsers.push({
+            userId: user._id,
+            notifiedAt: new Date()
+          });
           return { success: true, userId: user._id };
         } else {
           failCount++;
@@ -148,15 +174,134 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
 
     await Promise.all(notificationPromises);
 
+    // Save the updated request with notified users
+    await savedRequest.save();
+
+    // Step 4: Return response with request ID
     res.status(200).json({
       success: true,
       message: `Emergency alert sent to ${successCount} nearby helpers`,
+      requestId: savedRequest._id.toString(),
       notifiedUsers: successCount,
       failedUsers: failCount,
       totalUsers: usersToNotify.length,
     });
   } catch (error) {
     console.error("Send emergency alert error:", error);
+    res.status(500).json({
+      message: "Server error. Please try again later.",
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Accept emergency request (when a helper accepts the SOS)
+router.post("/accept-request/:requestId", authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    // Get the helper who is accepting
+    const helper = await User.findById(req.userId);
+    if (!helper) {
+      return res.status(404).json({
+        message: "User not found",
+        success: false,
+      });
+    }
+
+    // Find the emergency request
+    const emergencyRequest = await EmergencyRequest.findById(requestId);
+    if (!emergencyRequest) {
+      return res.status(404).json({
+        message: "Emergency request not found",
+        success: false,
+      });
+    }
+
+    // Check if request is still active
+    if (emergencyRequest.status !== "active") {
+      return res.status(400).json({
+        message: "This emergency request is no longer active",
+        success: false,
+      });
+    }
+
+    // Check if helper already accepted
+    const alreadyAccepted = emergencyRequest.acceptedHelpers.some(
+      (h) => h.helperId.toString() === req.userId.toString()
+    );
+
+    if (alreadyAccepted) {
+      return res.status(400).json({
+        message: "You have already accepted this request",
+        success: false,
+      });
+    }
+
+    // Calculate distance between helper and requester
+    let distance = null;
+    if (helper.location && helper.location.latitude && helper.location.longitude) {
+      distance = calculateDistance(
+        emergencyRequest.location.latitude,
+        emergencyRequest.location.longitude,
+        helper.location.latitude,
+        helper.location.longitude
+      );
+    }
+
+    // Add helper to accepted helpers list
+    emergencyRequest.acceptedHelpers.push({
+      helperId: helper._id,
+      helperName: helper.name,
+      helperPhone: helper.phone,
+      acceptedAt: new Date(),
+      distance: distance,
+    });
+
+    await emergencyRequest.save();
+
+    console.log(`✅ Helper ${helper.name} accepted emergency request ${requestId}`);
+
+    res.status(200).json({
+      success: true,
+      message: "Emergency request accepted successfully",
+      request: emergencyRequest,
+    });
+  } catch (error) {
+    console.error("Accept emergency request error:", error);
+    res.status(500).json({
+      message: "Server error. Please try again later.",
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+// Get accepted helpers for a specific emergency request
+router.get("/request/:requestId/helpers", authenticateToken, async (req, res) => {
+  try {
+    const { requestId } = req.params;
+
+    const emergencyRequest = await EmergencyRequest.findById(requestId)
+      .populate('userId', 'name phone')
+      .populate('acceptedHelpers.helperId', 'name phone location');
+
+    if (!emergencyRequest) {
+      return res.status(404).json({
+        message: "Emergency request not found",
+        success: false,
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      request: emergencyRequest,
+      helpers: emergencyRequest.acceptedHelpers || [],
+      message: "Accepted helpers fetched successfully",
+    });
+  } catch (error) {
+    console.error("Get accepted helpers error:", error);
     res.status(500).json({
       message: "Server error. Please try again later.",
       success: false,

@@ -1243,4 +1243,66 @@ class ApiService {
       };
     }
   }
+
+  // Accept emergency request (when a helper accepts the SOS)
+  static Future<Map<String, dynamic>> acceptEmergencyRequest(String requestId) async {
+    try {
+      final token = await getToken();
+      if (token == null) {
+        return {
+          'success': false,
+          'message': 'No token found. Please login again.',
+        };
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/emergency/accept-request/$requestId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
+      );
+
+      Map<String, dynamic> data;
+      try {
+        data = jsonDecode(response.body) as Map<String, dynamic>;
+      } catch (e) {
+        return {
+          'success': false,
+          'message': 'Invalid server response. Status: ${response.statusCode}',
+        };
+      }
+
+      if (response.statusCode == 200 && data['success'] == true) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Emergency request accepted successfully',
+          'request': data['request'],
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to accept emergency request',
+        };
+      }
+    } catch (e) {
+      String errorMessage = 'Network error occurred. ';
+      if (e.toString().contains('Failed host lookup')) {
+        errorMessage += 'Cannot reach the server. Please check your internet connection.';
+      } else if (e.toString().contains('timeout')) {
+        errorMessage += 'Connection timeout. Please check if the server is running.';
+      } else {
+        errorMessage += e.toString();
+      }
+      return {
+        'success': false,
+        'message': errorMessage,
+      };
+    }
+  }
 }

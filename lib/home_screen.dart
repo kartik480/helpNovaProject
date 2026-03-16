@@ -93,14 +93,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => EmergencyNotificationDialog(
-              userName: data['userName'] ?? 'User',
-              userPhone: data['userPhone'] ?? '',
-              latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-              longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
-              description: data['description'] ?? 'Emergency SOS request',
-              requestId: data['userId'] ?? '',
-            ),
+                    builder: (context) => EmergencyNotificationDialog(
+                      userName: data['userName'] ?? 'User',
+                      userPhone: data['userPhone'] ?? '',
+                      latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
+                      longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
+                      description: data['description'] ?? 'Emergency SOS request',
+                      requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
+                    ),
           );
           debugPrint('[HomeScreen] Emergency dialog shown successfully');
         } catch (e) {
@@ -112,14 +112,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 showDialog(
                   context: context,
                   barrierDismissible: false,
-                  builder: (context) => EmergencyNotificationDialog(
-                    userName: data['userName'] ?? 'User',
-                    userPhone: data['userPhone'] ?? '',
-                    latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
-                    longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
-                    description: data['description'] ?? 'Emergency SOS request',
-                    requestId: data['userId'] ?? '',
-                  ),
+                    builder: (context) => EmergencyNotificationDialog(
+                      userName: data['userName'] ?? 'User',
+                      userPhone: data['userPhone'] ?? '',
+                      latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
+                      longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
+                      description: data['description'] ?? 'Emergency SOS request',
+                      requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
+                    ),
                 );
                 debugPrint('[HomeScreen] Emergency dialog shown on retry');
               } catch (retryError) {

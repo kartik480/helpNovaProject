@@ -1,6 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'api_service.dart';
 import '../widgets/emergency_notification_dialog.dart';
 import 'dart:async';
@@ -219,7 +218,7 @@ class NotificationService {
               latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
               longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
               description: data['description'] ?? 'Emergency SOS request',
-              requestId: data['userId'] ?? '',
+              requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
             ),
           );
           debugPrint('Dialog shown successfully');
@@ -241,7 +240,7 @@ class NotificationService {
                 latitude: double.tryParse(data['latitude'] ?? '0') ?? 0,
                 longitude: double.tryParse(data['longitude'] ?? '0') ?? 0,
                 description: data['description'] ?? 'Emergency SOS request',
-                requestId: data['userId'] ?? '',
+                requestId: data['requestId'] ?? data['userId'] ?? '', // Use requestId if available, fallback to userId
               ),
             );
             debugPrint('Dialog shown successfully on retry');
