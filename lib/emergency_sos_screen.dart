@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
+import 'dart:math';
 import 'widgets/radar_map_panel.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
+import 'services/geocoding_service.dart';
 import 'utils/responsive.dart';
 
 class EmergencySosScreen extends StatefulWidget {
@@ -23,6 +25,9 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
   List<Map<String, dynamic>> acceptedHelpers = [];
   List<Map<String, dynamic>> helperLocations = []; // Real-time helper locations
   List<Map<String, dynamic>> activeUsers = []; // All active users with location enabled
+  List<Map<String, dynamic>> nearbyActiveUsers = []; // Filtered active users within 10km (using Google Maps API)
+  int nearbyHelpersCount = 0; // Count of nearby helpers within 10km
+  bool isLoadingNearbyHelpers = false;
   Map<String, dynamic>? requestInfo;
   Timer? _helperLocationTimer;
   Timer? _activeUsersTimer;
@@ -38,6 +43,148 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     _helperLocationTimer?.cancel();
     _activeUsersTimer?.cancel();
     super.dispose();
+  }
+
+  // Cache for distance calculations to minimize API calls
+  static final Map<String, double> _distanceCache = {};
+  
+  // Calculate distance using Google Maps Distance Matrix API for accurate road distances
+  // Falls back to Haversine if API call fails
+  Future<double> _calculateDistance(double lat1, double lon1, double lat2, double lon2) async {
+    // Check cache first
+    final cacheKey = '${lat1.toStringAsFixed(6)},${lon1.toStringAsFixed(6)}_${lat2.toStringAsFixed(6)},${lon2.toStringAsFixed(6)}';
+    if (_distanceCache.containsKey(cacheKey)) {
+      return _distanceCache[cacheKey]!;
+    }
+    
+    // Try Google Maps Distance Matrix API first
+    try {
+      final roadDistance = await GeocodingService.getRoadDistance(lat1, lon1, lat2, lon2);
+      if (roadDistance != null) {
+        _distanceCache[cacheKey] = roadDistance;
+        return roadDistance;
+      }
+    } catch (e) {
+      print('Distance Matrix API error: $e, falling back to Haversine');
+    }
+    
+    // Fallback to Haversine formula if API fails
+    const double earthRadius = 6371; // Earth's radius in kilometers
+    double dLat = _degreesToRadians(lat2 - lat1);
+    double dLon = _degreesToRadians(lon2 - lon1);
+    
+    double a = sin(dLat / 2) * sin(dLat / 2) +
+        cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) *
+        sin(dLon / 2) * sin(dLon / 2);
+    
+    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    double distance = earthRadius * c;
+    
+    // Cache the fallback result too
+    _distanceCache[cacheKey] = distance;
+    return distance;
+  }
+
+  double _degreesToRadians(double degrees) {
+    return degrees * (pi / 180);
+  }
+
+  // Filter helpers within 10km radius using Google Maps Distance Matrix API
+  Future<List<Map<String, dynamic>>> _getNearbyHelpers(List<Map<String, dynamic>> helpers, double radiusKm) async {
+    if (userLatitude == null || userLongitude == null) {
+      return [];
+    }
+    
+    List<Map<String, dynamic>> nearbyHelpers = [];
+    
+    for (var helper in helpers) {
+      final lat = helper['latitude'];
+      final lng = helper['longitude'];
+      
+      if (lat == null || lng == null) continue;
+      
+      final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
+      final longitude = lng is double ? lng : (lng is String ? double.tryParse(lng) : lng as double?);
+      
+      if (latitude == null || longitude == null) continue;
+      
+      try {
+        final distance = await _calculateDistance(userLatitude!, userLongitude!, latitude, longitude);
+        if (distance <= radiusKm) {
+          nearbyHelpers.add(helper);
+        }
+      } catch (e) {
+        print('Error calculating distance for helper: $e');
+        // Skip this helper if distance calculation fails
+      }
+    }
+    
+    return nearbyHelpers;
+  }
+
+  // Get count of nearby helpers (within 10km) using Google Maps Distance Matrix API
+  Future<int> _getNearbyHelpersCount() async {
+    if (userLatitude == null || userLongitude == null) {
+      return 0;
+    }
+    
+    int count = 0;
+    const double radiusKm = 10.0;
+    
+    // Count from helperLocations
+    for (var helper in helperLocations) {
+      final lat = helper['latitude'];
+      final lng = helper['longitude'];
+      
+      if (lat != null && lng != null) {
+        final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
+        final longitude = lng is double ? lng : (lng is String ? double.tryParse(lng) : lng as double?);
+        
+        if (latitude != null && longitude != null) {
+          try {
+            final distance = await _calculateDistance(userLatitude!, userLongitude!, latitude, longitude);
+            if (distance <= radiusKm) {
+              count++;
+            }
+          } catch (e) {
+            print('Error calculating distance: $e');
+          }
+        }
+      }
+    }
+    
+    // Count from activeUsers (avoid duplicates)
+    Set<String> countedIds = {};
+    for (var helper in helperLocations) {
+      final id = helper['helperId']?.toString() ?? helper['_id']?.toString();
+      if (id != null) countedIds.add(id);
+    }
+    
+    for (var user in activeUsers) {
+      final userId = user['id']?.toString() ?? user['_id']?.toString();
+      if (userId != null && countedIds.contains(userId)) continue;
+      
+      final lat = user['latitude'];
+      final lng = user['longitude'];
+      
+      if (lat != null && lng != null) {
+        final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
+        final longitude = lng is double ? lng : (lng is String ? double.tryParse(lng) : lng as double?);
+        
+        if (latitude != null && longitude != null) {
+          try {
+            final distance = await _calculateDistance(userLatitude!, userLongitude!, latitude, longitude);
+            if (distance <= radiusKm) {
+              count++;
+            }
+          } catch (e) {
+            print('Error calculating distance: $e');
+          }
+        }
+      }
+    }
+    
+    return count;
   }
 
   Future<void> _getUserLocation() async {
@@ -83,6 +230,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       _loadHelperLocations();
       _loadActiveUsers();
       _startPeriodicUpdates();
+      // Update nearby helpers after location is available
+      _updateNearbyHelpers();
     } catch (e) {
       print('Error getting location: $e');
       setState(() {
@@ -123,6 +272,8 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           helperLocations = List<Map<String, dynamic>>.from(result['helpers'] ?? []);
         });
         print('[EmergencySOS] Loaded ${helperLocations.length} helper locations');
+        // Update nearby helpers count after loading helper locations
+        _updateNearbyHelpers();
       }
     } catch (e) {
       print('Error loading helper locations: $e');
@@ -138,9 +289,46 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           activeUsers = List<Map<String, dynamic>>.from(result['users'] ?? []);
         });
         print('[EmergencySOS] Loaded ${activeUsers.length} active users');
+        // Update nearby helpers after loading active users
+        _updateNearbyHelpers();
       }
     } catch (e) {
       print('Error loading active users: $e');
+    }
+  }
+
+  // Update nearby helpers using Google Maps Distance Matrix API
+  Future<void> _updateNearbyHelpers() async {
+    if (userLatitude == null || userLongitude == null || isLoadingNearbyHelpers) {
+      return; // Skip if already loading or location not available
+    }
+
+    setState(() {
+      isLoadingNearbyHelpers = true;
+    });
+
+    try {
+      // Filter active users within 10km using Google Maps Distance Matrix API
+      // This uses accurate road distances instead of straight-line distance
+      final filtered = await _getNearbyHelpers(activeUsers, 10.0);
+      final count = await _getNearbyHelpersCount();
+      
+      if (mounted) {
+        setState(() {
+          nearbyActiveUsers = filtered;
+          nearbyHelpersCount = count;
+          isLoadingNearbyHelpers = false;
+        });
+        
+        print('[EmergencySOS] Found $count nearby helpers within 10km using Google Maps Distance Matrix API (road distance)');
+      }
+    } catch (e) {
+      print('Error updating nearby helpers: $e');
+      if (mounted) {
+        setState(() {
+          isLoadingNearbyHelpers = false;
+        });
+      }
     }
   }
 
@@ -482,7 +670,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                   userLongitude: userLongitude!,
                   helpers: acceptedHelpers,
                   helperLocations: helperLocations,
-                  activeUsers: activeUsers,
+                  activeUsers: nearbyActiveUsers, // Only show helpers within 10km (filtered using Google Maps API)
                 ),
                 // Display coordinates under the map
                 Container(
@@ -509,8 +697,31 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     ],
                   ),
                 ),
-                // Display helper count - show accepted helpers and active users as potential helpers
-                if (helperLocations.isNotEmpty || activeUsers.isNotEmpty)
+                // Display helper count - show accepted helpers and nearby active users (within 10km)
+                if (isLoadingNearbyHelpers)
+                  Container(
+                    margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 8),
+                        Text(
+                          'Calculating distances...',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else if (helperLocations.isNotEmpty || nearbyActiveUsers.isNotEmpty)
                   Container(
                     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                     padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -525,7 +736,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         Icon(Icons.people, color: Colors.green.shade700, size: 16),
                         SizedBox(width: 8),
                         Text(
-                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | ${activeUsers.length} Nearby Helper${activeUsers.length != 1 ? 's' : ''} Available',
+                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | ${nearbyActiveUsers.length} Nearby Helper${nearbyActiveUsers.length != 1 ? 's' : ''} Within 10km (Road Distance)',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green.shade900,
@@ -663,6 +874,44 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
           SizedBox(height: 16), // Add bottom padding for better scrolling
         ],
         ),
+      ),
+      bottomNavigationBar: (userLatitude != null && userLongitude != null)
+          ? _buildBottomWarningBar()
+          : null,
+    );
+  }
+
+  Widget _buildBottomWarningBar() {
+    // Use the state variable that's updated with Google Maps API calculations
+    if (nearbyHelpersCount > 0) {
+      // Don't show warning if there are nearby helpers
+      return SizedBox.shrink();
+    }
+    
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        border: Border(
+          top: BorderSide(color: Colors.orange.shade300, width: 2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 20),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No nearby helpers found. Make sure helpers have location enabled and are within 10km.',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.orange.shade900,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

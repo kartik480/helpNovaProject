@@ -97,4 +97,53 @@ class GeocodingService {
   static void clearCache() {
     _addressCache.clear();
   }
+
+  /// Calculate road distance between two coordinates using Google Maps Distance Matrix API
+  /// Returns distance in kilometers, or null if API call fails
+  static Future<double?> getRoadDistance(
+    double originLat,
+    double originLng,
+    double destLat,
+    double destLng,
+  ) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/distancematrix/json'
+        '?origins=$originLat,$originLng'
+        '&destinations=$destLat,$destLng'
+        '&units=metric'
+        '&key=$_apiKey',
+      );
+
+      final response = await http.get(url).timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Distance Matrix API request timeout');
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        
+        if (data['status'] == 'OK' && data['rows'] != null) {
+          final rows = data['rows'] as List;
+          if (rows.isNotEmpty) {
+            final elements = rows[0]['elements'] as List;
+            if (elements.isNotEmpty) {
+              final element = elements[0] as Map<String, dynamic>;
+              if (element['status'] == 'OK' && element['distance'] != null) {
+                // Distance is in meters, convert to kilometers
+                final distanceInMeters = element['distance']['value'] as int;
+                return distanceInMeters / 1000.0;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Distance Matrix API error: $e');
+    }
+    
+    return null;
+  }
 }

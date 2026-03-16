@@ -38,7 +38,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool isLocationEnabled = false;
   Timer? _locationUpdateTimer;
   List<dynamic> activeUsers = []; // List of other users with location enabled
+  List<dynamic> emergencyAlerts = []; // Active emergency alerts/alerts
   Timer? _activeUsersRefreshTimer;
+  Timer? _emergencyAlertsTimer;
 
   @override
   void initState() {
@@ -55,6 +57,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _notificationSubscription?.cancel();
     _locationUpdateTimer?.cancel();
     _activeUsersRefreshTimer?.cancel();
+    _emergencyAlertsTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
@@ -98,6 +101,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       
       if (isEmergency) {
         debugPrint('[HomeScreen] ✅ Emergency detected! Showing dialog...');
+        // Refresh emergency alerts to show red marker on map
+        _loadEmergencyAlerts();
+        
         // Always use NotificationService to show dialog - it has better context handling
         // This ensures the dialog shows regardless of which screen the user is on
         NotificationService.showEmergencyDialog(message);
@@ -200,9 +206,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      // Refresh nearby requests when app comes back to foreground
+      // Refresh nearby requests and emergency alerts when app comes back to foreground
       if (userLatitude != null && userLongitude != null) {
         _loadNearbyRequests();
+        _loadEmergencyAlerts();
       }
     }
   }
@@ -265,9 +272,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       // Start periodic refresh of active users
       _startActiveUsersRefresh();
 
-      // Load nearby requests and active users
+      // Load nearby requests, active users, and emergency alerts
       _loadNearbyRequests();
       _loadActiveUsers();
+      _loadEmergencyAlerts();
+      _startEmergencyAlertsRefresh();
     } catch (e) {
       print('Error getting location: $e');
     }
@@ -417,7 +426,58 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     });
   }
 
-  // Build map markers for current user and all active users
+  // Load emergency alerts (active emergency requests)
+  Future<void> _loadEmergencyAlerts() async {
+    if (!isLocationEnabled) {
+      setState(() {
+        emergencyAlerts = [];
+      });
+      return;
+    }
+
+    try {
+      debugPrint('[HomeScreen] Loading emergency alerts...');
+      final result = await ApiService.getAlerts();
+
+      if (result['success'] == true) {
+        // Filter only emergency alerts with location data
+        final alerts = result['alerts'] ?? [];
+        final emergencyAlertsList = alerts.where((alert) {
+          return alert['type'] == 'emergency_alert' &&
+                 alert['latitude'] != null &&
+                 alert['longitude'] != null &&
+                 (alert['isRead'] == null || alert['isRead'] == false); // Only show unread alerts
+        }).toList();
+
+        setState(() {
+          emergencyAlerts = emergencyAlertsList;
+        });
+        debugPrint('[HomeScreen] ✅ Loaded ${emergencyAlerts.length} active emergency alerts');
+      } else {
+        debugPrint('[HomeScreen] ❌ Failed to load emergency alerts: ${result['message']}');
+        setState(() {
+          emergencyAlerts = [];
+        });
+      }
+    } catch (e) {
+      debugPrint('[HomeScreen] Error loading emergency alerts: $e');
+      setState(() {
+        emergencyAlerts = [];
+      });
+    }
+  }
+
+  // Start periodic refresh of emergency alerts (every 10 seconds)
+  void _startEmergencyAlertsRefresh() {
+    _emergencyAlertsTimer?.cancel();
+    _emergencyAlertsTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (mounted && isLocationEnabled) {
+        await _loadEmergencyAlerts();
+      }
+    });
+  }
+
+  // Build map markers for current user, active users, and emergency alerts
   Set<Marker> _buildMapMarkers() {
     Set<Marker> markers = {};
 
@@ -462,7 +522,88 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       }
     }
 
+    // Add red markers for emergency alerts (victims who pressed alert button)
+    for (int i = 0; i < emergencyAlerts.length; i++) {
+      try {
+        final alert = emergencyAlerts[i];
+        final lat = alert['latitude'];
+        final lon = alert['longitude'];
+        final userName = alert['userName'] as String? ?? 'User';
+        final requestId = alert['requestId'] as String? ?? alert['userId'] as String? ?? 'alert_$i';
+        
+        if (lat != null && lon != null) {
+          final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
+          final longitude = lon is double ? lon : (lon is String ? double.tryParse(lon) : lon as double?);
+          
+          if (latitude != null && longitude != null) {
+            markers.add(
+              Marker(
+                markerId: MarkerId('emergency_$requestId'),
+                position: LatLng(latitude, longitude),
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                infoWindow: InfoWindow(
+                  title: '🚨 Emergency Alert',
+                  snippet: '$userName needs help',
+                ),
+                onTap: () {
+                  // Show emergency dialog when red marker is tapped
+                  _showEmergencyAlertDialog(alert);
+                },
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('[HomeScreen] Error adding marker for emergency alert: $e');
+      }
+    }
+
     return markers;
+  }
+
+  // Show emergency alert dialog when red marker is tapped
+  void _showEmergencyAlertDialog(dynamic alert) {
+    if (!mounted) return;
+    
+    final userName = alert['userName'] as String? ?? 'User';
+    final userPhone = alert['userPhone'] as String? ?? '';
+    final lat = alert['latitude'];
+    final lon = alert['longitude'];
+    final description = alert['message'] as String? ?? alert['description'] as String? ?? 'Emergency SOS request';
+    final requestId = alert['requestId'] as String? ?? alert['userId'] as String? ?? '';
+    
+    double latitude = 0;
+    double longitude = 0;
+    
+    if (lat != null) {
+      latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) ?? 0 : 0);
+    }
+    if (lon != null) {
+      longitude = lon is double ? lon : (lon is String ? double.tryParse(lon) ?? 0 : 0);
+    }
+    
+    if (latitude == 0 || longitude == 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Invalid location data'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => EmergencyNotificationDialog(
+        userName: userName,
+        userPhone: userPhone,
+        latitude: latitude,
+        longitude: longitude,
+        description: description,
+        requestId: requestId,
+      ),
+    );
   }
 
   @override
