@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
-import 'dart:math';
 import 'widgets/radar_map_panel.dart';
 import 'services/api_service.dart';
 import 'services/notification_service.dart';
@@ -45,57 +44,16 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
     super.dispose();
   }
 
-  // Cache for distance calculations to minimize API calls
-  static final Map<String, double> _distanceCache = {};
-  
-  // Calculate distance using Google Maps Distance Matrix API for accurate road distances
-  // Falls back to Haversine if API call fails
-  Future<double> _calculateDistance(double lat1, double lon1, double lat2, double lon2) async {
-    // Check cache first
-    final cacheKey = '${lat1.toStringAsFixed(6)},${lon1.toStringAsFixed(6)}_${lat2.toStringAsFixed(6)},${lon2.toStringAsFixed(6)}';
-    if (_distanceCache.containsKey(cacheKey)) {
-      return _distanceCache[cacheKey]!;
-    }
-    
-    // Try Google Maps Distance Matrix API first
-    try {
-      final roadDistance = await GeocodingService.getRoadDistance(lat1, lon1, lat2, lon2);
-      if (roadDistance != null) {
-        _distanceCache[cacheKey] = roadDistance;
-        return roadDistance;
-      }
-    } catch (e) {
-      print('Distance Matrix API error: $e, falling back to Haversine');
-    }
-    
-    // Fallback to Haversine formula if API fails
-    const double earthRadius = 6371; // Earth's radius in kilometers
-    double dLat = _degreesToRadians(lat2 - lat1);
-    double dLon = _degreesToRadians(lon2 - lon1);
-    
-    double a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(_degreesToRadians(lat1)) * cos(_degreesToRadians(lat2)) *
-        sin(dLon / 2) * sin(dLon / 2);
-    
-    double c = 2 * atan2(sqrt(a), sqrt(1 - a));
-    double distance = earthRadius * c;
-    
-    // Cache the fallback result too
-    _distanceCache[cacheKey] = distance;
-    return distance;
-  }
 
-  double _degreesToRadians(double degrees) {
-    return degrees * (pi / 180);
-  }
-
-  // Filter helpers within 10km radius using Google Maps Distance Matrix API
+  // Filter helpers within 10km radius using Google Maps Distance Matrix API (batch processing)
   Future<List<Map<String, dynamic>>> _getNearbyHelpers(List<Map<String, dynamic>> helpers, double radiusKm) async {
-    if (userLatitude == null || userLongitude == null) {
+    if (userLatitude == null || userLongitude == null || helpers.isEmpty) {
       return [];
     }
     
-    List<Map<String, dynamic>> nearbyHelpers = [];
+    // Prepare destinations list for batch API call
+    List<Map<String, double>> destinations = [];
+    List<Map<String, dynamic>> validHelpers = [];
     
     for (var helper in helpers) {
       final lat = helper['latitude'];
@@ -108,83 +66,115 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
       
       if (latitude == null || longitude == null) continue;
       
-      try {
-        final distance = await _calculateDistance(userLatitude!, userLongitude!, latitude, longitude);
-        if (distance <= radiusKm) {
-          nearbyHelpers.add(helper);
-        }
-      } catch (e) {
-        print('Error calculating distance for helper: $e');
-        // Skip this helper if distance calculation fails
-      }
+      destinations.add({'lat': latitude, 'lng': longitude});
+      validHelpers.add(helper);
     }
     
-    return nearbyHelpers;
+    if (destinations.isEmpty) return [];
+    
+    try {
+      // Use batch Distance Matrix API for efficient processing
+      final distances = await GeocodingService.getBatchRoadDistances(
+        userLatitude!,
+        userLongitude!,
+        destinations,
+      );
+      
+      List<Map<String, dynamic>> nearbyHelpers = [];
+      
+      // Filter helpers based on road distances
+      for (int i = 0; i < validHelpers.length; i++) {
+        final distance = distances[i];
+        if (distance != null && distance <= radiusKm) {
+          nearbyHelpers.add(validHelpers[i]);
+        }
+      }
+      
+      print('[EmergencySOS] Filtered ${nearbyHelpers.length} nearby helpers using Google Maps Distance Matrix API (road distance)');
+      return nearbyHelpers;
+    } catch (e) {
+      print('Error in batch distance calculation: $e');
+      return [];
+    }
   }
 
-  // Get count of nearby helpers (within 10km) using Google Maps Distance Matrix API
+  // Get count of nearby helpers (within 10km) using Google Maps Distance Matrix API (batch processing)
   Future<int> _getNearbyHelpersCount() async {
     if (userLatitude == null || userLongitude == null) {
       return 0;
     }
     
-    int count = 0;
     const double radiusKm = 10.0;
     
-    // Count from helperLocations
+    // Combine all helpers (helperLocations + activeUsers) avoiding duplicates
+    List<Map<String, dynamic>> allHelpers = [];
+    Set<String> addedIds = {};
+    
+    // Add helperLocations first
     for (var helper in helperLocations) {
+      final id = helper['helperId']?.toString() ?? helper['_id']?.toString();
+      if (id != null && !addedIds.contains(id)) {
+        allHelpers.add(helper);
+        addedIds.add(id);
+      }
+    }
+    
+    // Add activeUsers (avoid duplicates)
+    for (var user in activeUsers) {
+      final userId = user['id']?.toString() ?? user['_id']?.toString();
+      if (userId != null && !addedIds.contains(userId)) {
+        allHelpers.add(user);
+        addedIds.add(userId);
+      }
+    }
+    
+    if (allHelpers.isEmpty) return 0;
+    
+    // Prepare destinations list for batch API call
+    List<Map<String, double>> destinations = [];
+    List<Map<String, dynamic>> validHelpers = [];
+    
+    for (var helper in allHelpers) {
       final lat = helper['latitude'];
       final lng = helper['longitude'];
       
-      if (lat != null && lng != null) {
-        final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
-        final longitude = lng is double ? lng : (lng is String ? double.tryParse(lng) : lng as double?);
-        
-        if (latitude != null && longitude != null) {
-          try {
-            final distance = await _calculateDistance(userLatitude!, userLongitude!, latitude, longitude);
-            if (distance <= radiusKm) {
-              count++;
-            }
-          } catch (e) {
-            print('Error calculating distance: $e');
-          }
+      if (lat == null || lng == null) continue;
+      
+      final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
+      final longitude = lng is double ? lng : (lng is String ? double.tryParse(lng) : lng as double?);
+      
+      if (latitude == null || longitude == null) continue;
+      
+      destinations.add({'lat': latitude, 'lng': longitude});
+      validHelpers.add(helper);
+    }
+    
+    if (destinations.isEmpty) return 0;
+    
+    try {
+      // Use batch Distance Matrix API for efficient processing
+      final distances = await GeocodingService.getBatchRoadDistances(
+        userLatitude!,
+        userLongitude!,
+        destinations,
+      );
+      
+      int count = 0;
+      
+      // Count helpers within radius based on road distances
+      for (int i = 0; i < validHelpers.length; i++) {
+        final distance = distances[i];
+        if (distance != null && distance <= radiusKm) {
+          count++;
         }
       }
-    }
-    
-    // Count from activeUsers (avoid duplicates)
-    Set<String> countedIds = {};
-    for (var helper in helperLocations) {
-      final id = helper['helperId']?.toString() ?? helper['_id']?.toString();
-      if (id != null) countedIds.add(id);
-    }
-    
-    for (var user in activeUsers) {
-      final userId = user['id']?.toString() ?? user['_id']?.toString();
-      if (userId != null && countedIds.contains(userId)) continue;
       
-      final lat = user['latitude'];
-      final lng = user['longitude'];
-      
-      if (lat != null && lng != null) {
-        final latitude = lat is double ? lat : (lat is String ? double.tryParse(lat) : lat as double?);
-        final longitude = lng is double ? lng : (lng is String ? double.tryParse(lng) : lng as double?);
-        
-        if (latitude != null && longitude != null) {
-          try {
-            final distance = await _calculateDistance(userLatitude!, userLongitude!, latitude, longitude);
-            if (distance <= radiusKm) {
-              count++;
-            }
-          } catch (e) {
-            print('Error calculating distance: $e');
-          }
-        }
-      }
+      print('[EmergencySOS] Found $count nearby helpers within ${radiusKm}km using Google Maps Distance Matrix API (road distance)');
+      return count;
+    } catch (e) {
+      print('Error in batch distance calculation for count: $e');
+      return 0;
     }
-    
-    return count;
   }
 
   Future<void> _getUserLocation() async {
@@ -736,7 +726,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         Icon(Icons.people, color: Colors.green.shade700, size: 16),
                         SizedBox(width: 8),
                         Text(
-                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | ${nearbyActiveUsers.length} Nearby Helper${nearbyActiveUsers.length != 1 ? 's' : ''} Within 10km (Road Distance)',
+                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | $nearbyHelpersCount Nearby Helper${nearbyHelpersCount != 1 ? 's' : ''} Within 10km (Road Distance)',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green.shade900,

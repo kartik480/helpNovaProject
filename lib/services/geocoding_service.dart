@@ -146,4 +146,84 @@ class GeocodingService {
     
     return null;
   }
+
+  /// Batch calculate road distances using Google Maps Distance Matrix API
+  /// Can handle up to 25 destinations per request (API limit)
+  /// Returns a map of index -> distance in kilometers
+  /// Returns empty map if API call fails
+  static Future<Map<int, double>> getBatchRoadDistances(
+    double originLat,
+    double originLng,
+    List<Map<String, double>> destinations, // List of {lat: double, lng: double}
+  ) async {
+    final Map<int, double> distances = {};
+    
+    if (destinations.isEmpty) return distances;
+    
+    try {
+      // Google Maps Distance Matrix API allows up to 25 destinations per request
+      const int batchSize = 25;
+      
+      // Process in batches
+      for (int i = 0; i < destinations.length; i += batchSize) {
+        final endIndex = (i + batchSize < destinations.length) ? i + batchSize : destinations.length;
+        final batch = destinations.sublist(i, endIndex);
+        
+        // Build destinations string: "lat1,lng1|lat2,lng2|..."
+        final destinationsStr = batch.map((dest) => '${dest['lat']},${dest['lng']}').join('|');
+        
+        final url = Uri.parse(
+          'https://maps.googleapis.com/maps/api/distancematrix/json'
+          '?origins=$originLat,$originLng'
+          '&destinations=$destinationsStr'
+          '&units=metric'
+          '&key=$_apiKey',
+        );
+
+        final response = await http.get(url).timeout(
+          Duration(seconds: 15),
+          onTimeout: () {
+            throw Exception('Distance Matrix API batch request timeout');
+          },
+        );
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body) as Map<String, dynamic>;
+          
+          if (data['status'] == 'OK' && data['rows'] != null) {
+            final rows = data['rows'] as List;
+            if (rows.isNotEmpty) {
+              final elements = rows[0]['elements'] as List;
+              
+              for (int j = 0; j < elements.length && j < batch.length; j++) {
+                final element = elements[j] as Map<String, dynamic>;
+                if (element['status'] == 'OK' && element['distance'] != null) {
+                  // Distance is in meters, convert to kilometers
+                  final distanceInMeters = element['distance']['value'] as int;
+                  final distanceInKm = distanceInMeters / 1000.0;
+                  distances[i + j] = distanceInKm; // Store with original index
+                }
+              }
+            }
+          } else {
+            print('Distance Matrix API batch error: ${data['status']}');
+            if (data['error_message'] != null) {
+              print('Error message: ${data['error_message']}');
+            }
+          }
+        } else {
+          print('Distance Matrix API HTTP error: ${response.statusCode}');
+        }
+        
+        // Small delay between batches to avoid rate limiting
+        if (endIndex < destinations.length) {
+          await Future.delayed(Duration(milliseconds: 200));
+        }
+      }
+    } catch (e) {
+      print('Distance Matrix API batch error: $e');
+    }
+    
+    return distances;
+  }
 }
