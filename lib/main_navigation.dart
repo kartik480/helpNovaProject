@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'request_screen.dart';
 import 'alerts_screen.dart';
+import 'profile_screen.dart';
 import 'utils/responsive.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -18,6 +19,7 @@ class _MainNavigationState extends State<MainNavigation> {
     HomeScreen(),
     RequestScreen(),
     AlertsScreen(),
+    ProfileScreen(),
   ];
 
   @override
@@ -60,6 +62,7 @@ class _MainNavigationState extends State<MainNavigation> {
               _buildNavItem(Icons.home_rounded, 'Home', 0),
               _buildNavItem(Icons.add_circle_rounded, 'Create', 1, isCenter: true),
               _buildNavItem(Icons.notifications_rounded, 'Alert', 2),
+              _buildNavItem(Icons.person_rounded, 'Profile', 3),
             ],
           ),
         ),
