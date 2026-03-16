@@ -202,8 +202,12 @@ class _RadarMapPanelState extends State<RadarMapPanel> {
 
   @override
   Widget build(BuildContext context) {
+    // Make map height responsive - use 40% of screen height but cap at 400px
+    final screenHeight = MediaQuery.of(context).size.height;
+    final mapHeight = (screenHeight * 0.4).clamp(250.0, 400.0);
+    
     return Container(
-      height: 300,
+      height: mapHeight,
       margin: EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),

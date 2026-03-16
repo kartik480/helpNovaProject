@@ -302,50 +302,52 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
         ),
         centerTitle: true,
       ),
-      body: Column(
-        children: [
-          // Emergency Status Banner
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(Responsive.spacing(context, 20)),
-            decoration: BoxDecoration(
-              color: Colors.red,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.red.withOpacity(0.3),
-                  blurRadius: 10,
-                  offset: Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Icon(
-                  Icons.emergency,
-                  color: Colors.white,
-                  size: Responsive.iconSize(context, 48),
-                ),
-                SizedBox(height: Responsive.spacing(context, 12)),
-                Text(
-                  'Emergency Alert Sent!',
-                  style: TextStyle(
+      body: SingleChildScrollView(
+        physics: AlwaysScrollableScrollPhysics(),
+        child: Column(
+          children: [
+            // Emergency Status Banner
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(Responsive.spacing(context, 20)),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.3),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.emergency,
                     color: Colors.white,
-                    fontSize: Responsive.fontSize(context, 22),
-                    fontWeight: FontWeight.bold,
+                    size: Responsive.iconSize(context, 48),
                   ),
-                ),
-                SizedBox(height: Responsive.spacing(context, 8)),
-                Text(
-                  'Your location has been shared with nearby helpers',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
-                    fontSize: Responsive.fontSize(context, 14),
+                  SizedBox(height: Responsive.spacing(context, 12)),
+                  Text(
+                    'Emergency Alert Sent!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: Responsive.fontSize(context, 22),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+                  SizedBox(height: Responsive.spacing(context, 8)),
+                  Text(
+                    'Your location has been shared with nearby helpers',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: Responsive.fontSize(context, 14),
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             ),
-          ),
 
           // Notification Alert Panel
           if (userLatitude != null && userLongitude != null)
@@ -496,7 +498,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                     ],
                   ),
                 ),
-                // Display helper count
+                // Display helper count - show accepted helpers and active users as potential helpers
                 if (helperLocations.isNotEmpty || activeUsers.isNotEmpty)
                   Container(
                     margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -512,7 +514,7 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
                         Icon(Icons.people, color: Colors.green.shade700, size: 16),
                         SizedBox(width: 8),
                         Text(
-                          '${helperLocations.length} Helper${helperLocations.length != 1 ? 's' : ''} on Map | ${activeUsers.length} Active User${activeUsers.length != 1 ? 's' : ''}',
+                          '${helperLocations.length} Accepted Helper${helperLocations.length != 1 ? 's' : ''} | ${activeUsers.length} Nearby Helper${activeUsers.length != 1 ? 's' : ''} Available',
                           style: TextStyle(
                             fontSize: 12,
                             color: Colors.green.shade900,
@@ -548,127 +550,108 @@ class _EmergencySosScreenState extends State<EmergencySosScreen> {
             ),
 
           // Accepted Users List
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Accepted Requests',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Accepted Requests',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.refresh, color: Colors.blue),
+                          onPressed: _loadAcceptedHelpers,
+                          tooltip: 'Refresh',
                         ),
-                      ),
-                      Row(
-                        children: [
-                          IconButton(
-                            icon: Icon(Icons.refresh, color: Colors.blue),
-                            onPressed: _loadAcceptedHelpers,
-                            tooltip: 'Refresh',
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.green,
+                            borderRadius: BorderRadius.circular(20),
                           ),
-                          Container(
-                            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.green,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              '${acceptedHelpers.length}',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14,
-                              ),
+                          child: Text(
+                            '${acceptedHelpers.length}',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 16),
-                  Expanded(
-                    child: isLoadingHelpers
-                        ? Center(
-                            child: CircularProgressIndicator(),
-                          )
-                        : acceptedHelpers.isEmpty
-                            ? RefreshIndicator(
-                                onRefresh: _loadAcceptedHelpers,
-                                child: SingleChildScrollView(
-                                  physics: AlwaysScrollableScrollPhysics(),
-                                  child: Container(
-                                    height: MediaQuery.of(context).size.height * 0.4,
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Icon(
-                                            Icons.people_outline,
-                                            size: 64,
-                                            color: Colors.grey[400],
-                                          ),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            'No helpers accepted yet',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              color: Colors.grey[600],
-                                            ),
-                                          ),
-                                          SizedBox(height: 8),
-                                          Text(
-                                            'Helpers will appear here once they accept your request',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              color: Colors.grey[500],
-                                            ),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                          SizedBox(height: 16),
-                                          Text(
-                                            'Pull down to refresh',
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey[400],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                SizedBox(height: 16),
+                isLoadingHelpers
+                    ? Container(
+                        height: 200,
+                        child: Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    : acceptedHelpers.isEmpty
+                        ? Container(
+                            padding: EdgeInsets.symmetric(vertical: 40),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.people_outline,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  SizedBox(height: 16),
+                                  Text(
+                                    'No helpers accepted yet',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey[600],
                                     ),
                                   ),
-                                ),
-                              )
-                            : RefreshIndicator(
-                                onRefresh: _loadAcceptedHelpers,
-                                child: ListView.builder(
-                                  physics: AlwaysScrollableScrollPhysics(),
-                                  itemCount: acceptedHelpers.length,
-                                  itemBuilder: (context, index) {
-                                    final helper = acceptedHelpers[index];
-                                    // Convert dynamic map to string map for display
-                                    final userMap = <String, String>{
-                                      'name': helper['name']?.toString() ?? 'Helper',
-                                      'skill': helper['skill']?.toString() ?? 'Helper',
-                                      'distance': helper['distance']?.toString() ?? 'Unknown',
-                                      'phone': helper['phone']?.toString() ?? '',
-                                      'bloodGroup': helper['bloodGroup']?.toString() ?? '',
-                                      'status': helper['status']?.toString() ?? 'Accepted',
-                                    };
-                                    return _buildUserCard(userMap, context);
-                                  },
-                                ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Helpers will appear here once they accept your request',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey[500],
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
                               ),
-                  ),
-                ],
-              ),
+                            ),
+                          )
+                        : Column(
+                            children: acceptedHelpers.map((helper) {
+                              // Convert dynamic map to string map for display
+                              final userMap = <String, String>{
+                                'name': helper['name']?.toString() ?? 'Helper',
+                                'skill': helper['skill']?.toString() ?? 'Helper',
+                                'distance': helper['distance']?.toString() ?? 'Unknown',
+                                'phone': helper['phone']?.toString() ?? '',
+                                'bloodGroup': helper['bloodGroup']?.toString() ?? '',
+                                'status': helper['status']?.toString() ?? 'Accepted',
+                              };
+                              return _buildUserCard(userMap, context);
+                            }).toList(),
+                          ),
+              ],
             ),
           ),
+          SizedBox(height: 16), // Add bottom padding for better scrolling
         ],
+        ),
       ),
     );
   }

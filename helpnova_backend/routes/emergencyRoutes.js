@@ -79,35 +79,24 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     console.log(`📍 Sender location: ${latitude}, ${longitude}`);
     console.log(`⏰ Looking for users active within last 1 hour`);
     
-    // First, find ALL active users with location enabled (like active-users endpoint)
+    // First, find ALL active users with location enabled (exactly like active-users endpoint)
     // We'll check for FCM tokens later when sending notifications
     const allPotentialUsers = await User.find({
       _id: { $ne: req.userId }, // Exclude the sender
       locationAllowed: true, // Only users who allow location sharing
-      'location.latitude': { $ne: null, $exists: true }, // Only users with location data
-      'location.longitude': { $ne: null, $exists: true },
+      'location.latitude': { $ne: null, $exists: true }, // Only users with valid latitude
+      'location.longitude': { $ne: null, $exists: true }, // Only users with valid longitude
+      $or: [
+        { 'location.lastUpdated': { $gte: oneHourAgo } }, // Updated within last hour
+        { 'location.lastUpdated': null }, // Or never updated (newly enabled)
+        { 'location.lastUpdated': { $exists: false } } // Or field doesn't exist
+      ]
     });
 
-    console.log(`👥 Found ${allPotentialUsers.length} total active users with location enabled`);
-
-    // Filter by time window (but be lenient - include if lastUpdated is null or recent)
-    const nearbyUsers = allPotentialUsers.filter(user => {
-      if (!user.location || !user.location.lastUpdated) {
-        // Include users without lastUpdated (just enabled location)
-        console.log(`✅ Including ${user.name} - location just enabled (no lastUpdated)`);
-        return true;
-      }
-      const lastUpdated = new Date(user.location.lastUpdated);
-      const isRecent = lastUpdated >= oneHourAgo;
-      if (isRecent) {
-        console.log(`✅ Including ${user.name} - location updated ${Math.round((Date.now() - lastUpdated.getTime()) / 60000)} minutes ago`);
-      } else {
-        console.log(`⚠️ Excluding ${user.name} - location updated ${Math.round((Date.now() - lastUpdated.getTime()) / 60000)} minutes ago (too old)`);
-      }
-      return isRecent;
-    });
-
-    console.log(`👥 After time filter: ${nearbyUsers.length} active users`);
+    console.log(`👥 Found ${allPotentialUsers.length} total active users with location enabled (matching active-users endpoint query)`);
+    
+    // Use allPotentialUsers directly (already filtered by time in query)
+    const nearbyUsers = allPotentialUsers;
 
     // Filter users by distance (within 10km - increased for better coverage)
     const usersToNotify = [];
@@ -159,11 +148,40 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     });
 
     if (usersToNotify.length === 0) {
-      console.log(`⚠️ No nearby helpers found. Reasons could be:`);
-      console.log(`   - No users with location enabled`);
-      console.log(`   - All users are more than ${maxDistance}km away`);
-      console.log(`   - Users haven't updated location recently`);
-      console.log(`   - Sender location: ${latitude}, ${longitude}`);
+      console.log(`⚠️ No nearby helpers found. Detailed analysis:`);
+      console.log(`   📍 Sender location: ${latitude}, ${longitude}`);
+      console.log(`   👥 Total active users with location: ${allPotentialUsers.length}`);
+      console.log(`   ⏰ Active users after time filter: ${nearbyUsers.length}`);
+      console.log(`   📏 Max distance: ${maxDistance}km`);
+      
+      // Log details of all potential users to see why they're being filtered out
+      if (allPotentialUsers.length > 0) {
+        console.log(`\n   📋 All potential users details:`);
+        allPotentialUsers.forEach(user => {
+          if (user.location && user.location.latitude && user.location.longitude) {
+            const distance = calculateDistance(
+              latitude,
+              longitude,
+              user.location.latitude,
+              user.location.longitude
+            );
+            const lastUpdated = user.location.lastUpdated ? 
+              `${Math.round((Date.now() - new Date(user.location.lastUpdated).getTime()) / 60000)} minutes ago` : 
+              'Never';
+            const isWithinTime = !user.location.lastUpdated || 
+              new Date(user.location.lastUpdated) >= oneHourAgo;
+            console.log(`      - ${user.name} (${user._id}):`);
+            console.log(`        Location: ${user.location.latitude}, ${user.location.longitude}`);
+            console.log(`        Distance: ${distance.toFixed(2)}km ${distance <= maxDistance ? '✅' : '❌ (too far)'}`);
+            console.log(`        Last Updated: ${lastUpdated} ${isWithinTime ? '✅' : '❌ (too old)'}`);
+            console.log(`        Has FCM Token: ${user.fcmToken && user.fcmToken.trim() !== '' ? '✅' : '❌'}`);
+          } else {
+            console.log(`      - ${user.name} (${user._id}): ❌ Invalid location data`);
+          }
+        });
+      } else {
+        console.log(`   ❌ No users found with locationAllowed: true and valid location data`);
+      }
       
       return res.status(200).json({
         success: true,
