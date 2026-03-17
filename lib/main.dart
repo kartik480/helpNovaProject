@@ -10,14 +10,24 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize Firebase
+  // Set navigator key for notifications early
+  NotificationService.setNavigatorKey(navigatorKey);
+  
+  // Initialize Firebase and notifications in background (non-blocking)
+  // This allows the app UI to show immediately while initialization happens
+  _initializeServicesInBackground();
+  
+  // Start the app immediately - don't wait for Firebase
+  runApp(const MyApp());
+}
+
+// Initialize Firebase and notifications in the background
+void _initializeServicesInBackground() async {
   try {
+    // Initialize Firebase
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
-    // Set navigator key for notifications
-    NotificationService.setNavigatorKey(navigatorKey);
     
     // Initialize FCM notifications
     await NotificationService.initialize();
@@ -27,8 +37,6 @@ void main() async {
     debugPrint('Firebase initialization error: $e');
     debugPrint('Please configure Firebase by following the setup guide in FIREBASE_SETUP.md');
   }
-  
-  runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {

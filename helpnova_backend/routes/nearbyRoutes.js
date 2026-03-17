@@ -42,7 +42,7 @@ const authenticateToken = (req, res, next) => {
 // Get all nearby requests within a radius
 router.get("/nearby", authenticateToken, async (req, res) => {
   try {
-    const { latitude, longitude, radius = 10 } = req.query; // radius in km, default 10km (increased from 5km)
+    const { latitude, longitude, radius = 5 } = req.query; // radius in km, default 5km
 
     if (!latitude || !longitude) {
       return res.status(400).json({

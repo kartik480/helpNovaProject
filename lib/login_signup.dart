@@ -13,7 +13,7 @@ class LoginSignupScreen extends StatefulWidget {
 }
 
 class _LoginSignupScreenState extends State<LoginSignupScreen>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late TabController _tabController;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -63,12 +63,17 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
   @override
   void initState() {
     super.initState();
+    
+    // Initialize TabController first
     _tabController = TabController(length: 2, vsync: this);
+    
+    // Initialize AnimationController
     _animationController = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: 800),
     );
     
+    // Initialize animations
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
@@ -78,10 +83,16 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _animationController, curve: Curves.easeOut));
     
-    _animationController.forward();
+    // Start animation after a frame to ensure everything is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _animationController.forward();
+      }
+    });
     
+    // Add tab controller listener
     _tabController.addListener(() {
-      if (_currentTabIndex != _tabController.index) {
+      if (mounted && _currentTabIndex != _tabController.index) {
         setState(() {
           _currentTabIndex = _tabController.index;
         });
@@ -124,13 +135,13 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             child: SlideTransition(
               position: _slideAnimation,
               child: SingleChildScrollView(
-                child: Column(
-                  children: [
+        child: Column(
+          children: [
                     SizedBox(height: Responsive.spacing(context, 40)),
-                    
+
                     // Logo and Title Section
-                    Column(
-                      children: [
+            Column(
+              children: [
                         Container(
                           padding: EdgeInsets.all(20),
                           decoration: BoxDecoration(
@@ -143,52 +154,52 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
                                 spreadRadius: 5,
                               ),
                             ],
-                          ),
-                          child: Image.asset(
-                            "images/logo.png",
+                  ),
+                  child: Image.asset(
+                    "images/logo.png",
                             height: Responsive.value(
                               context,
                               mobile: 80.0,
                               tablet: 100.0,
                               desktop: 120.0,
                             ),
-                            fit: BoxFit.contain,
-                          ),
-                        ),
+                    fit: BoxFit.contain,
+                  ),
+                ),
                         SizedBox(height: Responsive.spacing(context, 20)),
-                        Text(
-                          "Help Nova",
-                          style: TextStyle(
+            Text(
+              "Help Nova",
+              style: TextStyle(
                             fontSize: Responsive.fontSize(context, 32),
-                            fontWeight: FontWeight.bold,
+                fontWeight: FontWeight.bold,
                             color: Colors.red.shade700,
                             letterSpacing: 1.2,
-                          ),
-                        ),
+              ),
+            ),
                         SizedBox(height: Responsive.spacing(context, 8)),
-                        Text(
+            Text(
                           "Emergency Response Made Simple",
-                          style: TextStyle(
-                            fontSize: Responsive.fontSize(context, 14),
+              style: TextStyle(
+                fontSize: Responsive.fontSize(context, 14),
                             color: Colors.grey[600],
                             fontWeight: FontWeight.w500,
-                          ),
+              ),
                         ),
                       ],
-                    ),
-                    
+            ),
+
                     SizedBox(height: Responsive.spacing(context, 40)),
-                    
+
                     // Login/Signup Card
                     _buildLoginCard(),
-                    
+
                     SizedBox(height: Responsive.spacing(context, 30)),
-                    
+
                     // Social Login
                     _buildSocialLogin(),
-                    
+
                     SizedBox(height: Responsive.spacing(context, 20)),
-                  ],
+          ],
                 ),
               ),
             ),
@@ -210,63 +221,124 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       ),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(28),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.15),
-            blurRadius: 30,
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 40,
             spreadRadius: 0,
-            offset: Offset(0, 10),
+            offset: Offset(0, 15),
+          ),
+          BoxShadow(
+            color: Colors.red.withOpacity(0.1),
+            blurRadius: 20,
+            spreadRadius: 0,
+            offset: Offset(0, 5),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(28),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            // Tab Bar with gradient background
+            // Enhanced Tab Bar
             Container(
+              padding: EdgeInsets.all(6),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.red.shade600, Colors.red.shade800],
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
                 ),
               ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                labelColor: Colors.red.shade700,
-                unselectedLabelColor: Colors.white,
-                labelStyle: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-                unselectedLabelStyle: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-                tabs: [
-                  Tab(text: "Login"),
-                  Tab(text: "Sign Up"),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildTabButton(
+                      text: "Login",
+                      isSelected: _currentTabIndex == 0,
+                      onTap: () {
+                        _tabController.animateTo(0);
+                      },
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: _buildTabButton(
+                      text: "Sign Up",
+                      isSelected: _currentTabIndex == 1,
+                      onTap: () {
+                        _tabController.animateTo(1);
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
-            
+
             // Form Content
             Container(
-              padding: EdgeInsets.all(Responsive.spacing(context, 24)),
+              padding: EdgeInsets.all(Responsive.spacing(context, 28)),
               child: AnimatedSwitcher(
                 duration: Duration(milliseconds: 300),
+                transitionBuilder: (child, animation) {
+                  return FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: Offset(0.0, 0.1),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  );
+                },
                 child: _currentTabIndex == 0
                     ? _buildLoginForm()
                     : _buildSignupForm(),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabButton({
+    required String text,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: isSelected ? Colors.white : Colors.transparent,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.15),
+                    blurRadius: 10,
+                    offset: Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+              color: isSelected ? Colors.red.shade700 : Colors.grey[600],
+              letterSpacing: 0.5,
+            ),
+          ),
         ),
       ),
     );
@@ -284,11 +356,11 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
           keyboardType: TextInputType.emailAddress,
         ),
         
-        SizedBox(height: 16),
+        SizedBox(height: 18),
         
         _buildTextField(
           controller: _loginPasswordController,
-          icon: Icons.lock_outline,
+          icon: Icons.lock_outline_rounded,
           label: "Password",
           obscureText: _obscurePassword,
           suffixIcon: IconButton(
@@ -303,32 +375,50 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             },
           ),
         ),
-        
-        SizedBox(height: 12),
-        
+
+        SizedBox(height: 18),
+
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              children: [
-                Checkbox(
-                  value: _rememberMe,
-                  onChanged: (value) {
-                    setState(() {
-                      _rememberMe = value ?? false;
-                    });
-                  },
-                  activeColor: Colors.red,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-                Text(
-                  "Remember me",
-                  style: TextStyle(
-                    color: Colors.grey[700],
-                    fontSize: 14,
+            GestureDetector(
+              onTap: () {
+                setState(() {
+                  _rememberMe = !_rememberMe;
+                });
+              },
+              child: Row(
+                children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: _rememberMe ? Colors.red.shade600 : Colors.transparent,
+                      border: Border.all(
+                        color: _rememberMe ? Colors.red.shade600 : Colors.grey[400]!,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: _rememberMe
+                        ? Icon(
+                            Icons.check,
+                            size: 14,
+                            color: Colors.white,
+                          )
+                        : null,
                   ),
-                ),
-              ],
+                  SizedBox(width: 8),
+                  Text(
+                    "Remember me",
+                    style: TextStyle(
+                      color: Colors.grey[700],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -336,10 +426,15 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
                   SnackBar(content: Text('Password reset feature coming soon')),
                 );
               },
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
               child: Text(
                 "Forgot Password?",
                 style: TextStyle(
-                  color: Colors.red,
+                  color: Colors.red.shade600,
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
@@ -347,8 +442,8 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             ),
           ],
         ),
-        
-        SizedBox(height: 24),
+
+        SizedBox(height: 28),
         
         _buildActionButton(
           text: "Sign In",
@@ -358,20 +453,20 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       ],
     );
   }
-
+  
   Widget _buildSignupForm() {
     return SingleChildScrollView(
       key: ValueKey('signup'),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      mainAxisSize: MainAxisSize.min,
+      children: [
           _buildTextField(
             controller: _signupNameController,
-            icon: Icons.person_outline,
+            icon: Icons.person_outline_rounded,
             label: "Full Name",
           ),
           
-          SizedBox(height: 16),
+          SizedBox(height: 18),
           
           _buildTextField(
             controller: _signupPhoneController,
@@ -380,7 +475,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             keyboardType: TextInputType.phone,
           ),
           
-          SizedBox(height: 16),
+          SizedBox(height: 18),
           
           _buildTextField(
             controller: _signupEmailController,
@@ -389,11 +484,11 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             keyboardType: TextInputType.emailAddress,
           ),
           
-          SizedBox(height: 16),
+          SizedBox(height: 18),
           
           _buildTextField(
             controller: _signupPasswordController,
-            icon: Icons.lock_outline,
+            icon: Icons.lock_outline_rounded,
             label: "Password",
             obscureText: _obscurePassword,
             suffixIcon: IconButton(
@@ -408,12 +503,12 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
               },
             ),
           ),
-          
-          SizedBox(height: 16),
-          
+
+          SizedBox(height: 18),
+
           _buildTextField(
             controller: _signupConfirmPasswordController,
-            icon: Icons.lock_outline,
+            icon: Icons.lock_outline_rounded,
             label: "Confirm Password",
             obscureText: _obscureConfirmPassword,
             suffixIcon: IconButton(
@@ -428,12 +523,12 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
               },
             ),
           ),
-          
-          SizedBox(height: 16),
-          
+
+          SizedBox(height: 18),
+
           _buildDropdownField(
             value: _selectedBloodGroup,
-            icon: Icons.bloodtype,
+            icon: Icons.bloodtype_rounded,
             label: "Blood Group",
             items: _bloodGroups,
             onChanged: (value) {
@@ -442,9 +537,9 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
               });
             },
           ),
-          
-          SizedBox(height: 16),
-          
+
+          SizedBox(height: 18),
+
           _buildDropdownField(
             value: _selectedSkill,
             icon: Icons.medical_services_outlined,
@@ -457,11 +552,11 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             },
           ),
           
-          SizedBox(height: 16),
+          SizedBox(height: 18),
           
           _buildLocationSection(),
           
-          SizedBox(height: 24),
+          SizedBox(height: 28),
           
           _buildActionButton(
             text: "Create Account",
@@ -484,25 +579,55 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.grey[300]!,
+          width: 1.5,
+        ),
       ),
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
         obscureText: obscureText,
-        style: TextStyle(fontSize: 15),
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Colors.grey[800],
+        ),
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.red.shade600),
-          suffixIcon: suffixIcon,
+          prefixIcon: Container(
+            margin: EdgeInsets.all(12),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.red.shade600,
+              size: 20,
+            ),
+          ),
+          suffixIcon: suffixIcon != null
+              ? Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: suffixIcon,
+                )
+              : null,
           labelText: label,
           labelStyle: TextStyle(
             color: Colors.grey[600],
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
+          floatingLabelStyle: TextStyle(
+            color: Colors.red.shade600,
+            fontWeight: FontWeight.w600,
+          ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
         ),
       ),
     );
@@ -518,21 +643,47 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     return Container(
       decoration: BoxDecoration(
         color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: Colors.grey[300]!,
+          width: 1.5,
+        ),
       ),
       child: DropdownButtonFormField<String>(
         value: value,
         decoration: InputDecoration(
-          prefixIcon: Icon(icon, color: Colors.red.shade600),
+          prefixIcon: Container(
+            margin: EdgeInsets.all(12),
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: Colors.red.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              icon,
+              color: Colors.red.shade600,
+              size: 20,
+            ),
+          ),
           labelText: label,
           labelStyle: TextStyle(
             color: Colors.grey[600],
             fontSize: 14,
             fontWeight: FontWeight.w500,
           ),
+          floatingLabelStyle: TextStyle(
+            color: Colors.red.shade600,
+            fontWeight: FontWeight.w600,
+          ),
           border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        ),
+        style: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Colors.grey[800],
         ),
         items: items.map((String item) {
           return DropdownMenuItem<String>(
@@ -542,19 +693,23 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
         }).toList(),
         onChanged: onChanged,
         dropdownColor: Colors.white,
+        icon: Icon(
+          Icons.keyboard_arrow_down_rounded,
+          color: Colors.grey[600],
+        ),
       ),
     );
   }
 
   Widget _buildLocationSection() {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: _locationAllowed ? Colors.green.shade50 : Colors.grey[50],
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: _locationAllowed ? Colors.green : Colors.grey[300]!,
-          width: 2,
+          color: _locationAllowed ? Colors.green.shade400 : Colors.grey[300]!,
+          width: 1.5,
         ),
       ),
       child: Column(
@@ -562,11 +717,19 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
         children: [
           Row(
             children: [
-              Icon(
-                Icons.location_on,
-                color: _locationAllowed ? Colors.green : Colors.grey[600],
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: _locationAllowed ? Colors.green.shade100 : Colors.grey[200],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.location_on_rounded,
+                  color: _locationAllowed ? Colors.green.shade700 : Colors.grey[600],
+                  size: 20,
+                ),
               ),
-              SizedBox(width: 8),
+              SizedBox(width: 12),
               Expanded(
                 child: Text(
                   'Location Services',
@@ -591,22 +754,23 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
                     });
                   }
                 },
-                activeColor: Colors.green,
+                activeColor: Colors.green.shade600,
               ),
             ],
           ),
-          SizedBox(height: 12),
+          SizedBox(height: 14),
           if (_locationAllowed && _signupAddress != null)
             Container(
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.green.shade200),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.check_circle, color: Colors.green, size: 20),
-                  SizedBox(width: 8),
+                  Icon(Icons.check_circle_rounded, color: Colors.green.shade600, size: 22),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       _signupAddress!,
@@ -622,21 +786,23 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
             )
           else if (_locationAllowed)
             Container(
-              padding: EdgeInsets.all(12),
+              padding: EdgeInsets.all(14),
               decoration: BoxDecoration(
                 color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.orange.shade200),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 20),
-                  SizedBox(width: 8),
+                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 22),
+                  SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Please set your location on map',
                       style: TextStyle(
                         fontSize: 13,
                         color: Colors.orange.shade800,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ),
@@ -649,23 +815,42 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
               style: TextStyle(
                 fontSize: 13,
                 color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
               ),
             ),
           if (_locationAllowed)
-            SizedBox(height: 12),
+            SizedBox(height: 14),
           if (_locationAllowed)
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _openMapSearch,
-                icon: Icon(Icons.map, size: 18),
-                label: Text('Set Location on Map'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _openMapSearch,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.red.shade600, Colors.red.shade700],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.map_rounded, size: 18, color: Colors.white),
+                        SizedBox(width: 8),
+                        Text(
+                          'Set Location on Map',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -685,44 +870,62 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       height: 56,
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.red.shade600, Colors.red.shade800],
+          colors: [Colors.red.shade600, Colors.red.shade700],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.red.withOpacity(0.3),
-            blurRadius: 15,
-            offset: Offset(0, 5),
+            color: Colors.red.withOpacity(0.4),
+            blurRadius: 20,
+            offset: Offset(0, 8),
+          ),
+          BoxShadow(
+            color: Colors.red.withOpacity(0.2),
+            blurRadius: 10,
+            offset: Offset(0, 4),
           ),
         ],
       ),
-      child: ElevatedButton(
-        onPressed: onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(18),
+          child: Container(
+            alignment: Alignment.center,
+            child: isLoading
+                ? SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        text,
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    ],
+                  ),
           ),
         ),
-        child: isLoading
-            ? SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Text(
-                text,
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
-              ),
       ),
     );
   }
@@ -732,23 +935,48 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
       children: [
         Row(
           children: [
-            Expanded(child: Divider(color: Colors.grey[300])),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.transparent,
+                      Colors.grey[300]!,
+                    ],
+                  ),
+                ),
+              ),
+            ),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
               child: Text(
                 "Or continue with",
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: 13,
                   color: Colors.grey[600],
                   fontWeight: FontWeight.w500,
+                  letterSpacing: 0.3,
                 ),
               ),
             ),
-            Expanded(child: Divider(color: Colors.grey[300])),
+            Expanded(
+              child: Container(
+                height: 1,
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.grey[300]!,
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
         
-        SizedBox(height: 20),
+        SizedBox(height: 24),
         
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -775,7 +1003,7 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
           ],
         ),
         
-        SizedBox(height: 24),
+        SizedBox(height: 28),
         
         Padding(
           padding: EdgeInsets.symmetric(
@@ -786,13 +1014,35 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
               desktop: 80.0,
             ),
           ),
-          child: Text(
-            "By continuing, you agree to Help Nova's Terms of Service and Privacy Policy.",
+          child: RichText(
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey[600],
-              height: 1.5,
+            text: TextSpan(
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+              children: [
+                TextSpan(text: "By continuing, you agree to Help Nova's "),
+                TextSpan(
+                  text: "Terms of Service",
+                  style: TextStyle(
+                    color: Colors.red.shade600,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+                TextSpan(text: " and "),
+                TextSpan(
+                  text: "Privacy Policy",
+                  style: TextStyle(
+                    color: Colors.red.shade600,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+                TextSpan(text: "."),
+              ],
             ),
           ),
         ),
@@ -805,42 +1055,60 @@ class _LoginSignupScreenState extends State<LoginSignupScreen>
     required String label,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[300]!),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: Offset(0, 2),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: 28, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.grey[300]!,
+              width: 1.5,
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, color: Colors.grey[800], size: 24),
-            SizedBox(width: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.04),
+                blurRadius: 10,
+                offset: Offset(0, 3),
               ),
-            ),
-          ],
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.grey[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: Colors.grey[800],
+                  size: 22,
+                ),
+              ),
+              SizedBox(width: 12),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.grey[800],
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
-
+  
   void _openMapSearch() {
     Navigator.push(
       context,

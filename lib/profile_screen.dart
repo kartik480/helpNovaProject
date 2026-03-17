@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'login_signup.dart';
 import 'services/api_service.dart';
 import 'edit_profile_screen.dart';
+import 'help_history_screen.dart';
 import 'dart:math';
 
 class ProfileScreen extends StatefulWidget {
@@ -99,7 +100,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              expandedHeight: 200,
+              expandedHeight: 240,
               floating: false,
               pinned: true,
               backgroundColor: Colors.red,
@@ -114,15 +115,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                   ),
                   child: SafeArea(
                     child: Padding(
-                      padding: EdgeInsets.all(20),
+                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           // Profile Avatar with Rank Badge
                           Stack(
                             children: [
                               Container(
-                                padding: EdgeInsets.all(4),
+                                padding: EdgeInsets.all(3),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   gradient: LinearGradient(
@@ -133,10 +135,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   ),
                                 ),
                                 child: CircleAvatar(
-                                  radius: 50,
+                                  radius: 45,
                                   backgroundColor: Colors.white,
                                   child: CircleAvatar(
-                                    radius: 46,
+                                    radius: 42,
                                     backgroundImage: NetworkImage("https://i.pravatar.cc/150?img=${_userName?.hashCode ?? 1}"),
                                   ),
                                 ),
@@ -145,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 bottom: 0,
                                 right: 0,
                                 child: Container(
-                                  padding: EdgeInsets.all(6),
+                                  padding: EdgeInsets.all(5),
                                   decoration: BoxDecoration(
                                     color: _getRankColor(_userRank),
                                     shape: BoxShape.circle,
@@ -154,24 +156,26 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   child: Icon(
                                     _getRankIcon(_userRank),
                                     color: Colors.white,
-                                    size: 20,
+                                    size: 18,
                                   ),
                                 ),
                               ),
                             ],
                           ),
-                          SizedBox(height: 12),
+                          SizedBox(height: 10),
                           Text(
                             _userName ?? 'User',
                             style: TextStyle(
                               color: Colors.white,
-                              fontSize: 24,
+                              fontSize: 22,
                               fontWeight: FontWeight.bold,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          SizedBox(height: 4),
+                          SizedBox(height: 6),
                           Container(
-                            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            padding: EdgeInsets.symmetric(horizontal: 14, vertical: 5),
                             decoration: BoxDecoration(
                               color: _getRankColor(_userRank).withOpacity(0.2),
                               borderRadius: BorderRadius.circular(20),
@@ -186,14 +190,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                 Icon(
                                   _getRankIcon(_userRank),
                                   color: Colors.white,
-                                  size: 18,
+                                  size: 16,
                                 ),
                                 SizedBox(width: 6),
                                 Text(
                                   _userRank,
                                   style: TextStyle(
                                     color: Colors.white,
-                                    fontSize: 14,
+                                    fontSize: 13,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -213,7 +217,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
           children: [
             // Stats Cards
             Container(
-              padding: EdgeInsets.all(16),
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               child: Row(
                 children: [
                   Expanded(
@@ -279,7 +283,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildStatCard(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: EdgeInsets.all(16),
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -292,31 +296,34 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            padding: EdgeInsets.all(10),
+            padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: color.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(icon, color: color, size: 24),
+            child: Icon(icon, color: color, size: 22),
           ),
-          SizedBox(height: 8),
+          SizedBox(height: 6),
           Text(
             value,
             style: TextStyle(
-              fontSize: 20,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
             ),
           ),
-          SizedBox(height: 4),
+          SizedBox(height: 2),
           Text(
             label,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: 11,
               color: Colors.grey[600],
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
@@ -607,8 +614,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             icon: Icons.history,
             title: 'Help History',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Help History coming soon')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => HelpHistoryScreen(),
+                ),
               );
             },
           ),

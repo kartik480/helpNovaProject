@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'request_screen.dart';
 import 'alerts_screen.dart';
-import 'profile_screen.dart';
 import 'utils/responsive.dart';
 
 class MainNavigation extends StatefulWidget {
@@ -19,14 +18,17 @@ class _MainNavigationState extends State<MainNavigation> {
     HomeScreen(),
     RequestScreen(),
     AlertsScreen(),
-    ProfileScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
+    // Ensure index is within valid range
+    final safeIndex = _currentIndex.clamp(0, _screens.length - 1);
+    
     return Scaffold(
       body: IndexedStack(
-        index: _currentIndex,
+        key: ValueKey('main_navigation_stack'),
+        index: safeIndex,
         children: _screens,
       ),
       bottomNavigationBar: _buildInnovativeBottomNav(),
@@ -34,10 +36,7 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   Widget _buildInnovativeBottomNav() {
-    final contentHeight = Responsive.bottomNavContentHeight(context);
-    
     return Container(
-      height: Responsive.bottomNavHeight(context),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.only(
@@ -55,14 +54,14 @@ class _MainNavigationState extends State<MainNavigation> {
       child: SafeArea(
         top: false,
         child: Container(
-          height: contentHeight,
+          height: 65,
+          padding: EdgeInsets.symmetric(vertical: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(Icons.home_rounded, 'Home', 0),
-              _buildNavItem(Icons.add_circle_rounded, 'Create', 1, isCenter: true),
-              _buildNavItem(Icons.notifications_rounded, 'Alert', 2),
-              _buildNavItem(Icons.person_rounded, 'Profile', 3),
+              _buildNavItem(Icons.list_alt_rounded, 'My Request', 1),
+              _buildNavItem(Icons.notifications_rounded, 'Alerts', 2),
             ],
           ),
         ),
@@ -70,121 +69,58 @@ class _MainNavigationState extends State<MainNavigation> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index, {bool isCenter = false}) {
+  Widget _buildNavItem(IconData icon, String label, int index) {
+    // Ensure index is valid
+    if (index >= _screens.length) return SizedBox.shrink();
+    
     final isSelected = _currentIndex == index;
     final iconSize = Responsive.isSmallMobile(context)
-      ? Responsive.iconSize(context, isSelected ? 22 : 20)
-      : Responsive.iconSize(context, isSelected ? 26 : 24);
-    final centerIconSize = Responsive.isSmallMobile(context)
-      ? Responsive.iconSize(context, isSelected ? 26 : 24)
-      : Responsive.iconSize(context, isSelected ? 30 : 28);
-    final fontSize = Responsive.fontSize(context, Responsive.isSmallMobile(context) ? 10 : 11);
-    final centerButtonSize = Responsive.isSmallMobile(context)
-      ? (isSelected ? 52.0 : 50.0)
-      : Responsive.value(
-          context,
-          mobile: isSelected ? 58.0 : 55.0,
-          tablet: isSelected ? 70.0 : 65.0,
-          desktop: isSelected ? 80.0 : 75.0,
-        );
-    
-    if (isCenter) {
-      // Special center button with elevated design
-      return GestureDetector(
+      ? (isSelected ? 20.0 : 18.0)
+      : (isSelected ? 22.0 : 20.0);
+    final fontSize = Responsive.isSmallMobile(context) ? 10.0 : 11.0;
+
+    return Expanded(
+      child: GestureDetector(
         onTap: () => setState(() => _currentIndex = index),
-        child: AnimatedContainer(
-          duration: Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          width: centerButtonSize,
-          height: centerButtonSize,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.red : Colors.red.shade100,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withOpacity(isSelected ? 0.4 : 0.2),
-                blurRadius: isSelected ? 15 : 12,
-                offset: Offset(0, isSelected ? 6 : 4),
+        child: Container(
+          height: double.infinity,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              AnimatedContainer(
+                duration: Duration(milliseconds: 200),
+                padding: EdgeInsets.all(isSelected ? 6 : 4),
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.red.withOpacity(0.1) : Colors.transparent,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: isSelected ? Colors.red : Colors.grey.shade600,
+                  size: iconSize,
+                ),
+              ),
+              SizedBox(height: 3),
+              Flexible(
+                child: AnimatedDefaultTextStyle(
+                  duration: Duration(milliseconds: 200),
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                    color: isSelected ? Colors.red : Colors.grey.shade600,
+                    height: 1.0,
+                  ),
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ),
             ],
           ),
-          child: Icon(
-            icon,
-            color: isSelected ? Colors.white : Colors.red,
-            size: centerIconSize,
-          ),
-        ),
-      );
-    }
-
-    return GestureDetector(
-      onTap: () => setState(() => _currentIndex = index),
-      child: AnimatedContainer(
-        duration: Duration(milliseconds: 200),
-        curve: Curves.easeInOut,
-        padding: EdgeInsets.symmetric(
-          horizontal: Responsive.isSmallMobile(context) 
-            ? Responsive.spacing(context, 8) 
-            : Responsive.spacing(context, 14),
-          vertical: Responsive.isSmallMobile(context)
-            ? Responsive.spacing(context, 6)
-            : Responsive.spacing(context, 10),
-        ),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.red.shade50 : Colors.transparent,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedContainer(
-                  duration: Duration(milliseconds: 200),
-                  padding: EdgeInsets.all(isSelected ? 6 : 0),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.red.withOpacity(0.1) : Colors.transparent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    icon,
-                    color: isSelected ? Colors.red : Colors.grey.shade600,
-                    size: iconSize,
-                  ),
-                ),
-                if (index == 2) // Alerts badge
-                  Positioned(
-                    right: -4,
-                    top: -4,
-                    child: Container(
-                      width: Responsive.value(context, mobile: 10.0, tablet: 12.0, desktop: 14.0),
-                      height: Responsive.value(context, mobile: 10.0, tablet: 12.0, desktop: 14.0),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Colors.white,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            SizedBox(height: Responsive.isSmallMobile(context) 
-              ? Responsive.spacing(context, 4) 
-              : Responsive.spacing(context, 6)),
-            AnimatedDefaultTextStyle(
-              duration: Duration(milliseconds: 200),
-              style: TextStyle(
-                fontSize: fontSize,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? Colors.red : Colors.grey.shade600,
-              ),
-              child: Text(label),
-            ),
-          ],
         ),
       ),
     );

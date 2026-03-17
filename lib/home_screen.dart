@@ -35,6 +35,98 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool isLoadingRequests = false;
   double? userLatitude;
   double? userLongitude;
+  
+  // Ready-made sample requests - using getter to ensure proper initialization
+  List<Map<String, dynamic>> get _sampleRequests {
+    final now = DateTime.now();
+    return [
+      {
+        'typeCode': 'medical',
+        'title': 'Medical Emergency - Need Doctor',
+        'description': 'Elderly person needs immediate medical attention. Experiencing chest pain and difficulty breathing.',
+        'distance': 0.8,
+        'createdAt': now.subtract(Duration(minutes: 15)).toIso8601String(),
+        'location': {
+          'latitude': 13.6288 + 0.01,
+          'longitude': 79.4192 + 0.01,
+        },
+        'userId': {
+          'name': 'Priya Sharma',
+          'phone': '+91 98765 43210',
+          'email': 'priya.sharma@example.com',
+        },
+        'data': {},
+      },
+      {
+        'typeCode': 'blood',
+        'title': 'Urgent Blood Donation Needed',
+        'description': 'Patient requires O+ blood urgently. Hospital is running low on blood supply.',
+        'distance': 1.2,
+        'createdAt': now.subtract(Duration(minutes: 30)).toIso8601String(),
+        'location': {
+          'latitude': 13.6288 - 0.015,
+          'longitude': 79.4192 + 0.02,
+        },
+        'userId': {
+          'name': 'Raj Kumar',
+          'phone': '+91 98765 43211',
+          'email': 'raj.kumar@example.com',
+        },
+        'data': {},
+      },
+      {
+        'typeCode': 'mechanic',
+        'title': 'Vehicle Breakdown - Need Mechanic',
+        'description': 'Car broke down on highway. Engine won\'t start. Need urgent mechanic help.',
+        'distance': 2.5,
+        'createdAt': now.subtract(Duration(minutes: 45)).toIso8601String(),
+        'location': {
+          'latitude': 13.6288 + 0.02,
+          'longitude': 79.4192 - 0.01,
+        },
+        'userId': {
+          'name': 'Amit Patel',
+          'phone': '+91 98765 43212',
+          'email': 'amit.patel@example.com',
+        },
+        'data': {},
+      },
+      {
+        'typeCode': 'electrician',
+        'title': 'Electrical Emergency at Home',
+        'description': 'Power outage in entire building. Suspected electrical fault. Need electrician immediately.',
+        'distance': 1.8,
+        'createdAt': now.subtract(Duration(hours: 1)).toIso8601String(),
+        'location': {
+          'latitude': 13.6288 - 0.01,
+          'longitude': 79.4192 - 0.015,
+        },
+        'userId': {
+          'name': 'Sneha Reddy',
+          'phone': '+91 98765 43213',
+          'email': 'sneha.reddy@example.com',
+        },
+        'data': {},
+      },
+      {
+        'typeCode': 'accident',
+        'title': 'Road Accident - Immediate Help Needed',
+        'description': 'Two-wheeler accident occurred. Rider injured and needs immediate medical assistance.',
+        'distance': 0.5,
+        'createdAt': now.subtract(Duration(minutes: 5)).toIso8601String(),
+        'location': {
+          'latitude': 13.6288 + 0.005,
+          'longitude': 79.4192 + 0.005,
+        },
+        'userId': {
+          'name': 'Vikram Singh',
+          'phone': '+91 98765 43214',
+          'email': 'vikram.singh@example.com',
+        },
+        'data': {},
+      },
+    ];
+  }
   StreamSubscription<RemoteMessage>? _notificationSubscription;
   GoogleMapController? _mapController;
   bool isLocationEnabled = false;
@@ -389,7 +481,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final result = await ApiService.getNearbyRequests(
         latitude: userLatitude!,
         longitude: userLongitude!,
-        radius: 10.0, // 10km radius (increased from 5km)
+        radius: 5.0, // 5km radius
       );
 
       if (mounted) {
@@ -1267,39 +1359,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                             ),
                           )
                         else if (nearbyRequests.isEmpty)
-                          Container(
-                            padding: EdgeInsets.all(Responsive.spacing(context, 20)),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Center(
-                              child: Column(
-                                children: [
-                                  Icon(
-                                    Icons.location_off,
-                                    size: Responsive.iconSize(context, 48),
-                                    color: Colors.grey,
-                                  ),
-                                  SizedBox(height: Responsive.spacing(context, 8)),
-                                  Text(
-                                    'No nearby requests found',
-                                    style: TextStyle(
-                                      fontSize: Responsive.fontSize(context, 14),
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  SizedBox(height: Responsive.spacing(context, 4)),
-                                  Text(
-                                    'Check back later or refresh',
-                                    style: TextStyle(
-                                      fontSize: Responsive.fontSize(context, 12),
-                                      color: Colors.grey[500],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          // Show sample requests when no real requests are available
+                          Column(
+                            children: [
+                              // Show sample requests
+                              ..._sampleRequests.map((request) {
+                                return _buildNearbyRequestCard(context, request);
+                              }).toList(),
+                            ],
                           )
                         else
                           ...nearbyRequests.map((request) {

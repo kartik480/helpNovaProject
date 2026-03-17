@@ -13,7 +13,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<double> _scaleAnimation;
-  late Animation<double> _slideAnimation;
+  late Animation<Offset> _slideAnimation;
 
   @override
   void initState() {
@@ -21,7 +21,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     
     _animationController = AnimationController(
       vsync: this,
-      duration: Duration(milliseconds: 2000),
+      duration: Duration(milliseconds: 1200), // Reduced from 2000ms to 1200ms
     );
 
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
@@ -38,7 +38,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       ),
     );
 
-    _slideAnimation = Tween<double>(begin: 50.0, end: 0.0).animate(
+    _slideAnimation = Tween<Offset>(
+      begin: Offset(0, 0.3),
+      end: Offset.zero,
+    ).animate(
       CurvedAnimation(
         parent: _animationController,
         curve: Interval(0.3, 1.0, curve: Curves.easeOut),
@@ -51,15 +54,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void _startAnimation() async {
     await _animationController.forward();
     
-    // Wait a bit before navigating
-    await Future.delayed(Duration(milliseconds: 500));
+    // Reduced delay for faster startup - minimum time to show splash
+    await Future.delayed(Duration(milliseconds: 200));
     
     if (mounted) {
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
           pageBuilder: (context, animation, secondaryAnimation) => LoginSignupScreen(),
-          transitionDuration: Duration(milliseconds: 800),
+          transitionDuration: Duration(milliseconds: 400), // Faster transition
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(
               opacity: animation,
@@ -130,10 +133,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               
               // Animated App Name
               SlideTransition(
-                position: Tween<Offset>(
-                  begin: Offset(0, 0.3),
-                  end: Offset.zero,
-                ).animate(_slideAnimation),
+                position: _slideAnimation,
                 child: FadeTransition(
                   opacity: _fadeAnimation,
                   child: Column(

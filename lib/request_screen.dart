@@ -171,7 +171,11 @@ class _RequestScreenState extends State<RequestScreen> with SingleTickerProvider
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.75,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.only(
@@ -179,83 +183,89 @@ class _RequestScreenState extends State<RequestScreen> with SingleTickerProvider
             topRight: Radius.circular(25),
           ),
         ),
-        padding: EdgeInsets.all(20),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Select Request Type',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
+            Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Text(
+                'Select Request Type',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
               ),
             ),
-            SizedBox(height: 20),
-            GridView.count(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              crossAxisCount: 3,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 0.85,
-              children: [
-                _buildRequestTypeOption(
-                  Icons.local_hospital,
-                  'Medical',
-                  Colors.blue,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => MedicalHelpScreen())),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.symmetric(horizontal: 20),
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: NeverScrollableScrollPhysics(),
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                  childAspectRatio: 0.9,
+                  children: [
+                    _buildRequestTypeOption(
+                      Icons.local_hospital,
+                      'Medical',
+                      Colors.blue,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => MedicalHelpScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.bloodtype,
+                      'Blood',
+                      Colors.red,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => BloodDonationScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.car_crash,
+                      'Accident',
+                      Colors.orange,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => AccidentHelpScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.emergency,
+                      'Ambulance',
+                      Colors.red,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => AmbulanceRequestScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.build,
+                      'Mechanic',
+                      Colors.brown,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => MechanicHelpScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.electrical_services,
+                      'Electrician',
+                      Colors.yellow.shade700,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => ElectricianHelpScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.people,
+                      'Volunteer',
+                      Colors.green,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => VolunteerHelpScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.local_fire_department,
+                      'Fire',
+                      Colors.red.shade700,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => FireEmergencyScreen())),
+                    ),
+                    _buildRequestTypeOption(
+                      Icons.sos,
+                      'SOS',
+                      Colors.red.shade800,
+                      () => Navigator.push(context, MaterialPageRoute(builder: (_) => EmergencySosScreen())),
+                    ),
+                  ],
                 ),
-                _buildRequestTypeOption(
-                  Icons.bloodtype,
-                  'Blood',
-                  Colors.red,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => BloodDonationScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.car_crash,
-                  'Accident',
-                  Colors.orange,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => AccidentHelpScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.emergency,
-                  'Ambulance',
-                  Colors.red,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => AmbulanceRequestScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.build,
-                  'Mechanic',
-                  Colors.brown,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => MechanicHelpScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.electrical_services,
-                  'Electrician',
-                  Colors.yellow.shade700,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => ElectricianHelpScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.people,
-                  'Volunteer',
-                  Colors.green,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => VolunteerHelpScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.local_fire_department,
-                  'Fire',
-                  Colors.red.shade700,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => FireEmergencyScreen())),
-                ),
-                _buildRequestTypeOption(
-                  Icons.sos,
-                  'SOS',
-                  Colors.red.shade800,
-                  () => Navigator.push(context, MaterialPageRoute(builder: (_) => EmergencySosScreen())),
-                ),
-              ],
+              ),
             ),
             SizedBox(height: 20),
           ],
@@ -272,6 +282,7 @@ class _RequestScreenState extends State<RequestScreen> with SingleTickerProvider
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
+        padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
@@ -279,17 +290,20 @@ class _RequestScreenState extends State<RequestScreen> with SingleTickerProvider
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: color, size: 32),
-            SizedBox(height: 8),
+            Icon(icon, color: color, size: 28),
+            SizedBox(height: 6),
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: FontWeight.w600,
                 color: color,
               ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

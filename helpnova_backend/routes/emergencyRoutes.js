@@ -70,7 +70,7 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     const savedRequest = await emergencyRequest.save();
     console.log(`✅ SOS Request saved to database: ${savedRequest._id}`);
 
-    // Step 2: Find nearby users (within 2000km radius) who are active
+    // Step 2: Find nearby users (within 5km radius) who are active
     // Include users with location updated within the last 1 hour (active users)
     // Also include users who just enabled location (lastUpdated might be null or very recent)
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000); // 1 hour ago
@@ -98,9 +98,9 @@ router.post("/send-alert", authenticateToken, async (req, res) => {
     // Use allPotentialUsers directly (already filtered by time in query)
     const nearbyUsers = allPotentialUsers;
 
-    // Filter users by distance (within 2000km - increased for testing across states)
+    // Filter users by distance (within 5km)
     const usersToNotify = [];
-    const maxDistance = 2000; // 2000km radius (increased for testing across states)
+    const maxDistance = 5; // 5km radius
 
     for (const user of nearbyUsers) {
       // Check if user has valid location data

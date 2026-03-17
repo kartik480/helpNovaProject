@@ -1,16 +1,6 @@
 import 'package:flutter/material.dart';
 import 'services/api_service.dart';
-import 'emergency_sos_screen.dart';
-import 'widgets/emergency_notification_dialog.dart';
-import 'medical_help_screen.dart';
-import 'blood_donation_screen.dart';
-import 'accident_help_screen.dart';
-import 'ambulance_request_screen.dart';
-import 'mechanic_help_screen.dart';
-import 'electrician_help_screen.dart';
-import 'volunteer_help_screen.dart';
-import 'fire_emergency_screen.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'alert_detail_screen.dart';
 
 class AlertsScreen extends StatefulWidget {
   const AlertsScreen({super.key});
@@ -170,114 +160,24 @@ class _AlertsScreenState extends State<AlertsScreen> {
   }
 
   void _handleAlertTap(dynamic alert) {
-    if (alert['type'] == 'emergency_alert' && alert['latitude'] != null && alert['longitude'] != null) {
-      // Show emergency dialog
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (dialogContext) => EmergencyNotificationDialog(
-          userName: alert['userName'] ?? 'User',
-          userPhone: alert['userPhone'] ?? '',
-          latitude: alert['latitude'] as double,
-          longitude: alert['longitude'] as double,
-          description: alert['message'] ?? 'Emergency SOS request',
-          requestId: alert['requestId'] ?? '',
+    // Navigate to alert detail screen with map and action buttons
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AlertDetailScreen(
+          title: alert['title'] ?? 'Alert',
+          message: alert['message'] ?? '',
+          latitude: alert['latitude'] != null ? (alert['latitude'] as num).toDouble() : null,
+          longitude: alert['longitude'] != null ? (alert['longitude'] as num).toDouble() : null,
+          userPhone: alert['userPhone']?.toString(),
+          userName: alert['userName']?.toString(),
+          icon: _getIconForType(alert['type'] ?? ''),
+          color: _getColorForType(alert['type'] ?? ''),
         ),
-      );
-    } else if (alert['type'] == 'request_accepted') {
-      // Navigate to emergency SOS screen
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EmergencySosScreen(),
-        ),
-      );
-    }
+      ),
+    );
   }
 
-  void _handleReadyMadeAlertTap(Map<String, dynamic> alert) {
-    final action = alert['action'] as String;
-    
-    switch (action) {
-      case 'open_medical':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => MedicalHelpScreen()),
-        );
-        break;
-      case 'open_blood':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => BloodDonationScreen()),
-        );
-        break;
-      case 'open_accident':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => AccidentHelpScreen()),
-        );
-        break;
-      case 'open_ambulance':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => AmbulanceRequestScreen()),
-        );
-        break;
-      case 'open_mechanic':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => MechanicHelpScreen()),
-        );
-        break;
-      case 'open_electrician':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => ElectricianHelpScreen()),
-        );
-        break;
-      case 'open_volunteer':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => VolunteerHelpScreen()),
-        );
-        break;
-      case 'open_fire':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => FireEmergencyScreen()),
-        );
-        break;
-      case 'open_sos':
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => EmergencySosScreen()),
-        );
-        break;
-      case 'call_emergency':
-        _callEmergencyServices();
-        break;
-      default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Action: ${alert['title']}')),
-        );
-    }
-  }
-
-  Future<void> _callEmergencyServices() async {
-    final phoneNumber = '911'; // You can change this to your local emergency number
-    final url = Uri.parse('tel:$phoneNumber');
-    
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not make phone call'),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -324,7 +224,24 @@ class _AlertsScreenState extends State<AlertsScreen> {
                 alert['message'] as String,
                 alert['icon'] as IconData,
                 alert['color'] as Color,
-                onTap: () => _handleReadyMadeAlertTap(alert),
+                onTap: () {
+                  // Navigate to alert detail screen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => AlertDetailScreen(
+                        title: alert['title'] as String,
+                        message: alert['message'] as String,
+                        latitude: null, // Will generate random location
+                        longitude: null,
+                        userPhone: null,
+                        userName: null,
+                        icon: alert['icon'] as IconData,
+                        color: alert['color'] as Color,
+                      ),
+                    ),
+                  );
+                },
               )),
               SizedBox(height: 24),
               Divider(thickness: 2),
